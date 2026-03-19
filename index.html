@@ -450,32 +450,49 @@ async function parseBulletin() {
 }
 
 function extractTendersFromText(pages) {
-  // The Locarla bulletin PDF is a web-rendered document.
-  // PDF.js extracts text as a flat stream per page. The structure is:
-  // [TITLE] [CLIENT] Location: X Region: X Value: £X Deadline: X PT : Y Added By : Z [desc] Sector: A 2026/CODE
+  // The Locarla bulletin is a web page printed to PDF.
+  // CRITICAL ISSUE: "Tender Alerts" and "Contracts Awarded" both appear
+  // in the TOP NAVIGATION BAR on every page, so naive search finds them at pos ~0.
   //
-  // Strategy: join all pages into one text, find Tender Alerts section,
-  // then use "PT : VALUE" as the primary anchor for each tender block.
-  // Walk BACKWARDS ~500 chars from each PT anchor to find the title.
-  // Walk FORWARDS ~800 chars from PT anchor to find Sector.
+  // Fix: use page-by-page approach.
+  // Tender Alerts tenders appear before the "Winner:" keyword (awards section).
+  // Each page with a tender has "PT :" and "Added By :" in it.
+  // Each awards page has "Winner:" in it.
+  //
+  // Strategy:
+  // 1. Skip pages that contain "Winner:" (awards section)
+  // 2. From remaining pages, extract text and use PT : as anchor
+  // 3. Walk backwards for title, forwards for Sector
 
-  // 1. Join all pages, find Tender Alerts → Contracts Awarded window
-  const fullText = pages.join('\n');
-
-  // Loose section detection — handles "Tender Alerts DN", "TenderAlerts", etc.
-  const taMatch = fullText.search(/tender.{0,15}alert/i);
-  const caMatch = fullText.search(/contracts.{0,15}awarded/i);
-
-  let workingText;
-  if (taMatch >= 0) {
-    log(`Found "Tender Alerts" at char ${taMatch}`);
-    const end = caMatch > taMatch ? caMatch : fullText.length;
-    workingText = fullText.substring(taMatch, end);
-    log(`Working section: ${workingText.length} chars (up to Contracts Awarded)`);
-  } else {
-    log('Warning: Tender Alerts section not detected — scanning full document');
-    workingText = caMatch > 0 ? fullText.substring(0, caMatch) : fullText;
+  // Log first page raw text for debugging
+  if (pages.length > 0) {
+    log('--- Page 1 sample (first 300 chars) ---');
+    log(pages[0].substring(0, 300).replace(/\n/g, ' | '));
+    log('--- Page 2 sample ---');
+    if (pages[1]) log(pages[1].substring(0, 300).replace(/\n/g, ' | '));
   }
+
+  // Separate tender-alert pages from awards pages
+  // A page is an awards page if it contains "Winner:" prominently
+  // Nav bar text on every page: "Tender Alerts Contracts Awarded LA Minutes Housingnet News"
+  // So we look for "Winner:" which only appears in awards entries
+  let tenderPages = [];
+  let foundAwards = false;
+  for (let i = 0; i < pages.length; i++) {
+    const p = pages[i];
+    // Once we hit a page with "Winner:" it's the awards section — stop
+    if (!foundAwards && /Winner\s*:/i.test(p)) {
+      foundAwards = true;
+      log(`Awards section starts at page ${i+1} — stopping tender extraction`);
+    }
+    if (!foundAwards) tenderPages.push(p);
+  }
+
+  log(`Tender alert pages: ${tenderPages.length} of ${pages.length}`);
+  const workingText = tenderPages.join('\n');
+  log(`Working text: ${workingText.length} chars`);
+  log('--- Working text sample (chars 200-600) ---');
+  log(workingText.substring(200, 600).replace(/\n/g,' | '));
 
   // 2. Find all PT : occurrences — each marks a tender entry
   const ptRegex = /PT\s*:\s*([^\n]+?)(?=\s+Added By\s*:|\s+Sector:|$)/gi;
