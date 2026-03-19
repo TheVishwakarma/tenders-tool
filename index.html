@@ -786,27 +786,25 @@ function buildAndRenderSummary() {
     const valStr = (t.value && t.value !== '-') ? ` for ${t.value}` : '';
     const tenStr = t.tenure ? `, ${t.tenure}-month contract` : '';
 
-    // Build a brief description: one sentence from the stored description (first sentence only)
-    // or a short fallback
-    let briefDesc = '';
-    if (t.description) {
-      // Take only the first sentence
-      const firstSent = t.description.split(/(?<=[.!?])\s/)[0].trim();
-      // Cap at ~160 chars
-      briefDesc = firstSent.length > 160 ? firstSent.substring(0, 157) + '…' : firstSent;
-    } else {
-      briefDesc = `${t.title} introduces a ${(t.pt||'').toLowerCase()} opportunity${t.location ? ' in ' + t.location : ''}.`;
-    }
+    // Full description — no truncation
+    const desc = t.description
+      ? t.description.trim()
+      : `${t.title} introduces a ${(t.pt||'').toLowerCase()} opportunity${t.location ? ' in ' + t.location : ''}.`;
 
-    const visualPara = `<p>${escHtml(leadIn)}, <em>${escHtml(t.title)}</em> from <strong>${escHtml(t.client)}</strong>${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(briefDesc)}</p>`;
-    const wpPara = `<span style="font-weight: 400;">${escHtml(leadIn)}, ${escHtml(t.title)} from </span><b>${escHtml(t.client)}</b><span style="font-weight: 400;">${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(briefDesc)}</span>`;
+    // Ensure description ends with a full stop
+    const descClean = desc.endsWith('.') || desc.endsWith('…') ? desc.replace(/…$/, '.') : desc + '.';
+
+    const visualPara = `<p>${escHtml(leadIn)}, <em>${escHtml(t.title)}</em> from <strong>${escHtml(t.client)}</strong>${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</p>`;
+    // WP: each paragraph on its own line separated by a blank line for readability
+    const wpPara = `<span style="font-weight: 400;">${escHtml(leadIn)}, ${escHtml(t.title)} from </span><b>${escHtml(t.client)}</b><span style="font-weight: 400;">${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</span>`;
 
     visualParas.push(visualPara);
     wpParas.push(wpPara);
   });
 
   document.getElementById('summaryVisual').innerHTML = visualParas.join('');
-  document.getElementById('summaryCode').textContent = wpParas.join(' ');
+  // WP code: each paragraph separated by a blank line so it's readable and pasteable
+  document.getElementById('summaryCode').textContent = wpParas.join('\n\n');
 }
 
 function buildIntroKeywords(tenders) {
