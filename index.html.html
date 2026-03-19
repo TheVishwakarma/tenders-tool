@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tenders Summary Generator</title>
+<style>
+  :root {
+    --c-bg:#f7f6f3;--c-surface:#ffffff;--c-border:#e2dfd8;--c-border-dark:#c9c5bc;
+    --c-text:#1a1916;--c-text-muted:#6b6860;--c-text-hint:#9b9890;
+    --c-accent:#1a472a;--c-accent-light:#e8f4ec;--c-accent-mid:#2d6a4f;
+    --c-amber:#92400e;--c-amber-bg:#fef3c7;--c-red:#991b1b;--c-red-bg:#fee2e2;
+    --c-blue:#1e3a5f;--c-blue-bg:#dbeafe;--c-match:#064e3b;--c-match-bg:#d1fae5;
+    --font-sans:'Georgia','Times New Roman',serif;
+    --font-ui:'Segoe UI',system-ui,-apple-system,sans-serif;
+    --radius:8px;--radius-lg:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font-ui);background:var(--c-bg);color:var(--c-text);min-height:100vh;line-height:1.6;}
+  .header{background:var(--c-accent);color:white;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+  .header-left{display:flex;align-items:center;gap:12px;}
+  .header-logo{width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:white;font-family:var(--font-sans);}
+  .header-title{font-size:16px;font-weight:600;letter-spacing:-.01em;}
+  .header-sub{font-size:11px;opacity:.7;margin-top:1px;}
+  .header-steps{display:flex;gap:5px;align-items:center;}
+  .step-dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;background:rgba(255,255,255,.15);color:rgba(255,255,255,.55);cursor:default;transition:all .2s;}
+  .step-dot.active{background:white;color:var(--c-accent);}
+  .step-dot.done{background:rgba(255,255,255,.45);color:white;}
+  .step-line{width:18px;height:1px;background:rgba(255,255,255,.25);}
+  .main{max-width:1180px;margin:0 auto;padding:24px 20px;}
+  .card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius-lg);padding:22px;margin-bottom:18px;}
+  .card-title{font-size:13px;font-weight:600;color:var(--c-text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+  .card-title .sb{width:20px;height:20px;border-radius:50%;background:var(--c-accent);color:white;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+  .upload-zone{border:2px dashed var(--c-border-dark);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:var(--c-bg);}
+  .upload-zone:hover,.upload-zone.has-file{border-color:var(--c-accent);background:var(--c-accent-light);}
+  .upload-zone.has-file{border-style:solid;}
+  .upload-icon{font-size:28px;margin-bottom:6px;}
+  .upload-label{font-size:13px;color:var(--c-text-muted);}
+  .upload-label strong{color:var(--c-accent);}
+  .upload-status{font-size:12px;color:var(--c-match);font-weight:500;margin-top:6px;}
+  input[type=file]{display:none;}
+  .filter-pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;}
+  .pill{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:500;}
+  .pill-green{background:var(--c-match-bg);color:var(--c-match);}
+  .pill-amber{background:var(--c-amber-bg);color:var(--c-amber);}
+  .pill-red{background:var(--c-red-bg);color:var(--c-red);}
+  .tender-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .tender-table th{text-align:left;padding:7px 10px;background:var(--c-bg);color:var(--c-text-muted);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--c-border);white-space:nowrap;}
+  .tender-table td{padding:9px 10px;border-bottom:1px solid var(--c-border);vertical-align:top;}
+  .tender-table tr:last-child td{border-bottom:none;}
+  .tender-table tr:hover td{background:var(--c-bg);}
+  .match-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;}
+  .match-ok{background:var(--c-match-bg);color:var(--c-match);}
+  .match-warn{background:var(--c-amber-bg);color:var(--c-amber);}
+  .inline-input{width:100%;padding:4px 7px;border:1px solid var(--c-border-dark);border-radius:5px;font-size:11px;font-family:var(--font-ui);color:var(--c-text);background:white;}
+  .inline-input:focus{outline:none;border-color:var(--c-accent);}
+  .sr-num{width:26px;height:26px;border-radius:50%;background:var(--c-accent);color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+  .btn{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border-radius:var(--radius);font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s;font-family:var(--font-ui);}
+  .btn-primary{background:var(--c-accent);color:white;}
+  .btn-primary:hover{background:var(--c-accent-mid);}
+  .btn-secondary{background:white;color:var(--c-text);border:1px solid var(--c-border-dark);}
+  .btn-secondary:hover{background:var(--c-bg);}
+  .btn-sm{padding:5px 11px;font-size:11px;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .summary-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+  .toggle-tabs{display:flex;gap:0;border:1px solid var(--c-border-dark);border-radius:var(--radius);overflow:hidden;}
+  .toggle-tab{padding:6px 14px;font-size:12px;cursor:pointer;background:white;border:none;font-family:var(--font-ui);color:var(--c-text-muted);font-weight:500;transition:all .15s;}
+  .toggle-tab.active{background:var(--c-accent);color:white;}
+  .summary-visual{font-family:var(--font-sans);font-size:14px;line-height:1.85;color:var(--c-text);background:white;border:1px solid var(--c-border);border-radius:var(--radius);padding:22px;}
+  .summary-visual p{margin-bottom:13px;}
+  .summary-visual p:last-child{margin-bottom:0;}
+  .summary-code{font-family:'Courier New',Courier,monospace;font-size:11px;line-height:1.65;background:#1e1e1e;color:#d4d4d4;border-radius:var(--radius);padding:18px;white-space:pre-wrap;word-break:break-all;max-height:480px;overflow-y:auto;}
+  .date-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .date-label{font-size:12px;color:var(--c-text-muted);font-weight:500;}
+  .date-input{padding:7px 10px;border:1px solid var(--c-border-dark);border-radius:var(--radius);font-size:12px;font-family:var(--font-ui);color:var(--c-text);}
+  .date-input:focus{outline:none;border-color:var(--c-accent);}
+  .processing{display:flex;align-items:center;gap:9px;padding:12px 16px;background:var(--c-accent-light);border:1px solid var(--c-accent);border-radius:var(--radius);font-size:12px;color:var(--c-accent);font-weight:500;}
+  .spinner{width:14px;height:14px;border:2px solid var(--c-accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .table-wrapper{overflow-x:auto;}
+  .table-wrapper-inner{max-height:480px;overflow-y:auto;}
+  .stats-bar{display:flex;gap:14px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--c-border);margin-bottom:14px;}
+  .stat{text-align:center;}
+  .stat-num{font-size:20px;font-weight:600;color:var(--c-accent);}
+  .stat-label{font-size:10px;color:var(--c-text-muted);text-transform:uppercase;letter-spacing:.04em;}
+  .notice{padding:11px 14px;border-radius:var(--radius);font-size:12px;display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;}
+  .notice-info{background:var(--c-blue-bg);color:var(--c-blue);border:1px solid #93c5fd;}
+  .notice-warn{background:var(--c-amber-bg);color:var(--c-amber);border:1px solid #fcd34d;}
+  .section-divider{display:flex;align-items:center;gap:10px;margin:20px 0 16px;}
+  .section-divider-line{flex:1;height:1px;background:var(--c-border);}
+  .section-divider-label{font-size:11px;font-weight:600;color:var(--c-text-hint);text-transform:uppercase;letter-spacing:.06em;}
+  textarea.desc-input{width:100%;padding:5px 7px;border:1px solid var(--c-border-dark);border-radius:5px;font-size:11px;font-family:var(--font-ui);color:var(--c-text);background:white;resize:vertical;min-height:50px;}
+  textarea.desc-input:focus{outline:none;border-color:var(--c-accent);}
+  .pdf-log{font-size:11px;color:var(--c-text-muted);background:var(--c-bg);border:1px solid var(--c-border);border-radius:6px;padding:10px 12px;margin-top:10px;max-height:110px;overflow-y:auto;font-family:'Courier New',monospace;display:none;}
+  .hidden{display:none!important;}
+  .footer{text-align:center;padding:20px;font-size:11px;color:var(--c-text-hint);border-top:1px solid var(--c-border);margin-top:28px;}
+  .deploy-card{background:var(--c-accent);color:white;border-radius:var(--radius-lg);padding:22px;margin-bottom:18px;}
+  .deploy-card h3{font-size:15px;font-weight:600;margin-bottom:12px;opacity:.95;}
+  .deploy-steps{counter-reset:ds;list-style:none;display:flex;flex-direction:column;gap:8px;}
+  .deploy-steps li{counter-increment:ds;display:flex;align-items:flex-start;gap:10px;font-size:12px;opacity:.9;line-height:1.5;}
+  .deploy-steps li::before{content:counter(ds);min-width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.25);color:white;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px;flex-shrink:0;}
+  .deploy-steps code{background:rgba(255,255,255,.2);padding:1px 5px;border-radius:4px;font-family:'Courier New',monospace;font-size:11px;}
+  .deploy-toggle{font-size:11px;font-weight:600;color:var(--c-accent);background:white;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;margin-top:10px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">T</div>
+    <div>
+      <div class="header-title">Tenders Summary Generator</div>
+      <div class="header-sub">Locarla · Social Housing UK</div>
+    </div>
+  </div>
+  <div class="header-steps">
+    <div class="step-dot active" id="sdot1">1</div><div class="step-line"></div>
+    <div class="step-dot" id="sdot2">2</div><div class="step-line"></div>
+    <div class="step-dot" id="sdot3">3</div><div class="step-line"></div>
+    <div class="step-dot" id="sdot4">4</div><div class="step-line"></div>
+    <div class="step-dot" id="sdot5">5</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Deploy Guide -->
+  <div class="deploy-card" id="deployCard">
+    <h3>🚀 One-Click Daily Setup — Free GitHub Pages Hosting</h3>
+    <ol class="deploy-steps">
+      <li>Go to <strong>github.com</strong> → sign up free → click <strong>New repository</strong> → name it <code>tenders-tool</code> → set to Public → click Create</li>
+      <li>Click <strong>Add file → Upload files</strong> → drag this HTML file in → rename it <code>index.html</code> → click <strong>Commit changes</strong></li>
+      <li>Go to <strong>Settings → Pages</strong> → under Source select <strong>Deploy from branch: main / root</strong> → click Save</li>
+      <li>Your tool is now live at <code>https://YOUR-USERNAME.github.io/tenders-tool</code> — bookmark this URL</li>
+      <li>Each day: open the URL → upload bulletin PDF → upload Excel → generate → done. No install, no code, works on any browser</li>
+      <li>If filter rules change: download updated HTML from this chat → go to your repo → click <code>index.html</code> → pencil icon → paste → Commit</li>
+    </ol>
+    <button class="deploy-toggle" onclick="document.getElementById('deployCard').style.display='none'">Got it, hide this</button>
+  </div>
+
+  <!-- Step 1: Bulletin PDF -->
+  <div class="card" id="step1-card">
+    <div class="card-title"><span class="sb">1</span> Upload Daily Bulletin PDF</div>
+
+    <div class="notice notice-info">
+      Tenders are selected from the Bulletin first, then matched to the Excel. PDF.js extracts text live — no manual parsing needed. Only Housing-sector Tender Alerts tenders are included.
+    </div>
+
+    <div class="filter-pills">
+      <span class="pill pill-green">✓ Sector: Housing</span>
+      <span class="pill pill-green">✓ Tender Alerts only (no Awards)</span>
+      <span class="pill pill-red">✗ Begins with: CDE</span>
+      <span class="pill pill-red">✗ Begins with: Additional Information</span>
+      <span class="pill pill-red">✗ Begins with: Modification Notice</span>
+      <span class="pill pill-red">✗ Begins with: Cancelled</span>
+      <span class="pill pill-red">✗ Category: Materials</span>
+      <span class="pill pill-red">✗ Category: Other Daily Tenders</span>
+      <span class="pill pill-amber">⚠ FM: Hard FM only</span>
+      <span class="pill pill-amber">⚠ Prof Svcs: Architect / EPC / Fire Risk only</span>
+    </div>
+
+    <div class="upload-zone" id="pdfZone" onclick="document.getElementById('pdfInput').click()">
+      <div class="upload-icon">📄</div>
+      <div class="upload-label"><strong>Click to upload</strong> the HousingNet Bulletin PDF<br>or drag and drop here</div>
+      <div class="upload-status hidden" id="pdfStatus">✓ Bulletin loaded and parsed</div>
+    </div>
+    <input type="file" id="pdfInput" accept=".pdf">
+    <div class="pdf-log" id="pdfLog"></div>
+
+    <div class="date-row" style="margin-top:14px;">
+      <span class="date-label">Summary Date:</span>
+      <input type="date" class="date-input" id="summaryDate">
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" id="parseBulletinBtn" onclick="parseBulletin()">Process Bulletin →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Excel + Review -->
+  <div class="card hidden" id="step2-card">
+    <div class="card-title"><span class="sb">2</span> Upload Tenders Excel &amp; Review Matches</div>
+
+    <div id="bulletinStats" class="stats-bar"></div>
+
+    <div class="upload-zone" id="xlsxZone" onclick="document.getElementById('xlsxInput').click()" style="margin-bottom:14px;">
+      <div class="upload-icon">📊</div>
+      <div class="upload-label"><strong>Click to upload</strong> the Tenders Excel (.xlsx) from Locarla</div>
+      <div class="upload-status hidden" id="xlsxStatus">✓ Excel loaded &amp; matched</div>
+    </div>
+    <input type="file" id="xlsxInput" accept=".xlsx">
+
+    <div id="matchProcessing" class="processing hidden">
+      <div class="spinner"></div> Matching tenders against Excel…
+    </div>
+
+    <div id="tenderReviewSection" class="hidden">
+      <div class="section-divider">
+        <div class="section-divider-line"></div>
+        <div class="section-divider-label">Review &amp; Edit</div>
+        <div class="section-divider-line"></div>
+      </div>
+      <div class="notice notice-warn hidden" id="unmatchedNotice"></div>
+      <div class="table-wrapper">
+        <div class="table-wrapper-inner">
+          <table class="tender-table" id="tenderTable">
+            <thead>
+              <tr>
+                <th>Sr.</th><th>Match</th>
+                <th style="min-width:200px;">Title</th>
+                <th style="min-width:150px;">Client</th>
+                <th style="min-width:85px;">Value</th>
+                <th style="min-width:65px;">Tenure</th>
+                <th style="min-width:110px;">Location</th>
+                <th style="min-width:170px;">Description</th>
+              </tr>
+            </thead>
+            <tbody id="tenderTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-secondary btn-sm" onclick="addManualRow()">+ Add Tender</button>
+        <button class="btn btn-primary" onclick="goToStep3()">Generate Summary →</button>
+        <button class="btn btn-secondary" onclick="downloadSpreadsheet()">⬇ Download List</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Summary -->
+  <div class="card hidden" id="step3-card">
+    <div class="card-title"><span class="sb">3</span> Generated Summary</div>
+    <div class="summary-toolbar">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div class="toggle-tabs">
+          <button class="toggle-tab active" id="tabVisual" onclick="switchTab('visual')">Visual</button>
+          <button class="toggle-tab" id="tabCode" onclick="switchTab('code')">WordPress Code</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="regenBtn" onclick="regenerateSummary()">↺ Regenerate</button>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" id="copyVisualBtn" onclick="copyToClipboard('visual')">Copy Text</button>
+        <button class="btn btn-primary btn-sm" id="copyCodeBtn" onclick="copyToClipboard('code')">Copy WP Code</button>
+      </div>
+    </div>
+    <div id="summaryVisual" class="summary-visual"></div>
+    <div id="summaryCode" class="summary-code hidden"></div>
+    <div class="btn-group" style="margin-top:14px;">
+      <button class="btn btn-secondary" onclick="goBack(2)">← Edit Tenders</button>
+      <button class="btn btn-secondary" onclick="downloadSpreadsheet()">⬇ Download Tender List</button>
+    </div>
+  </div>
+
+</div>
+<div class="footer">Tenders Summary Generator · Locarla Social Housing UK</div>
+
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- SheetJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+// ─── Config ──────────────────────────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// Drop rules: titles beginning with these prefixes are excluded
+const TITLE_DROP_PREFIXES = ['CDE -','Additional Information -','Modification Notice -','Cancelled -','Cancelled-'];
+// FM: only pick when PT is Hard FM
+const FM_ALLOWED_PT = ['hard fm'];
+// Professional Services: only pick these PTs
+const PROFSVC_ALLOWED_PT = ['architect & surveyor','epc / energy management','fire risk assessment'];
+// Categories to skip entirely (bulletin section headers)
+const SKIP_CATEGORIES = ['materials','other daily tenders','contracts awarded'];
+
+// Variety pools for lead-ins and intro phrases — rotated on each Regenerate
+const LEAD_IN_POOLS = {
+  adaptation: [
+    'Delivering disability adaptation services across housing stock',
+    'Supporting independent living through home adaptation works',
+    'Advancing access improvement programmes within residential properties',
+    'Enabling occupants through targeted bathroom and mobility adaptation works',
+  ],
+  heating: [
+    'Ensuring warm and efficient homes across tenanted stock',
+    'Advancing heating system replacement across social housing',
+    'Supporting energy-efficient heating provision for tenanted properties',
+    'Delivering boiler replacement and heating upgrades across residential estates',
+  ],
+  newbuild: [
+    'Advancing new affordable housing delivery across the region',
+    'Expanding the social housing supply through new residential development',
+    'Supporting council-led housing construction programmes',
+    'Delivering new-build affordable homes for local communities',
+  ],
+  demolition: [
+    'Clearing residential sites for future regeneration',
+    'Supporting housing regeneration through planned demolition works',
+    'Enabling site clearance ahead of redevelopment programmes',
+  ],
+  insulation: [
+    'Improving thermal efficiency within domestic housing stock',
+    'Tackling damp and mould through residential insulation works',
+    'Supporting energy performance improvements across social housing',
+  ],
+  asbestos: [
+    'Ensuring safe removal of hazardous materials from residential properties',
+    'Supporting compliance programmes through asbestos survey and removal works',
+    'Delivering asbestos management services across housing assets',
+  ],
+  general: [
+    'Supporting planned maintenance works across housing assets',
+    'Delivering building improvement works within social housing portfolios',
+    'Advancing property improvement and repair programmes',
+  ],
+  architect: [
+    'Supporting built environment consultancy across housing renewal programmes',
+    'Procuring professional design and engineering services for housing projects',
+    'Advancing consultancy frameworks to underpin housing capital programmes',
+  ],
+  fm: [
+    'Delivering integrated facilities management services across residential assets',
+    'Providing hard FM and maintenance solutions within housing accommodation',
+  ],
+  other: [
+    'Advancing procurement opportunities within the social housing sector',
+    'Supporting housing service delivery through specialist contract opportunities',
+  ],
+};
+
+// Rotation state — increments on each regenerate so lead-ins cycle
+let rotationSeed = 0;
+
+function pickLeadIn(pool, offset) {
+  return pool[(rotationSeed + offset) % pool.length];
+}
+
+function getLeadIn(t, offset) {
+  const pt = (t.pt || '').toLowerCase();
+  if (pt.includes('adaptation')) return pickLeadIn(LEAD_IN_POOLS.adaptation, offset);
+  if (pt.includes('central heating') || pt.includes('heating')) return pickLeadIn(LEAD_IN_POOLS.heating, offset);
+  if (pt.includes('new-build') || pt.includes('residential new')) return pickLeadIn(LEAD_IN_POOLS.newbuild, offset);
+  if (pt.includes('demolition')) return pickLeadIn(LEAD_IN_POOLS.demolition, offset);
+  if (pt.includes('insulation')) return pickLeadIn(LEAD_IN_POOLS.insulation, offset);
+  if (pt.includes('asbestos')) return pickLeadIn(LEAD_IN_POOLS.asbestos, offset);
+  if (pt.includes('architect') || pt.includes('surveyor')) return pickLeadIn(LEAD_IN_POOLS.architect, offset);
+  if (pt.includes('hard fm') || pt.includes('fm')) return pickLeadIn(LEAD_IN_POOLS.fm, offset);
+  if (pt.includes('general building') || pt.includes('refurbishment') || pt.includes('conservation')) return pickLeadIn(LEAD_IN_POOLS.general, offset);
+  return pickLeadIn(LEAD_IN_POOLS.other, offset);
+}
+
+const INTRO_OPENERS = [
+  'Explore the latest Social Housing UK tenders featuring',
+  'Today\'s Social Housing UK bulletin highlights tenders across',
+  'Discover the latest contract opportunities in Social Housing UK, spanning',
+  'This week\'s Social Housing UK tender roundup covers',
+];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+const state = {
+  date: '',
+  bulletinTenders: [],
+  excelTenders: [],
+  matchedTenders: [],
+};
+
+// Set default date
+(function(){
+  const d = new Date();
+  document.getElementById('summaryDate').value = d.toISOString().split('T')[0];
+  state.date = d.toISOString().split('T')[0];
+})();
+
+// ─── PDF Parsing (PDF.js live) ────────────────────────────────────────────────
+function log(msg) {
+  const el = document.getElementById('pdfLog');
+  el.style.display = 'block';
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+async function parseBulletin() {
+  state.date = document.getElementById('summaryDate').value;
+  const pdfInput = document.getElementById('pdfInput');
+
+  if (!pdfInput.files || pdfInput.files.length === 0) {
+    // No PDF uploaded — use today's pre-parsed fallback
+    log('No PDF uploaded — using pre-parsed bulletin for 19/03/2026');
+    loadFallbackBulletinData();
+    showStep2();
+    return;
+  }
+
+  document.getElementById('parseBulletinBtn').disabled = true;
+  document.getElementById('parseBulletinBtn').textContent = 'Parsing PDF…';
+  document.getElementById('pdfLog').textContent = '';
+
+  const file = pdfInput.files[0];
+  const arrayBuffer = await file.arrayBuffer();
+
+  try {
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    log(`PDF loaded: ${pdf.numPages} pages`);
+
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n---PAGE---\n';
+    }
+
+    log('Text extracted, parsing tenders…');
+    const tenders = extractTendersFromText(fullText);
+    state.bulletinTenders = tenders;
+    log(`Tenders found after filtering: ${tenders.length}`);
+
+    document.getElementById('pdfStatus').classList.remove('hidden');
+    document.getElementById('pdfZone').classList.add('has-file');
+    document.getElementById('parseBulletinBtn').disabled = false;
+    document.getElementById('parseBulletinBtn').textContent = 'Process Bulletin →';
+    showStep2();
+  } catch(err) {
+    log('PDF parse error: ' + err.message);
+    log('Falling back to pre-parsed data for 19/03/2026');
+    loadFallbackBulletinData();
+    document.getElementById('parseBulletinBtn').disabled = false;
+    document.getElementById('parseBulletinBtn').textContent = 'Process Bulletin →';
+    showStep2();
+  }
+}
+
+function extractTendersFromText(text) {
+  // Split into page blocks, find Tender Alerts section, stop at Contracts Awarded
+  const pages = text.split('---PAGE---');
+  let inTenderAlerts = false;
+  let tenderAlertText = '';
+
+  for (const page of pages) {
+    if (/Tender Alerts/i.test(page)) inTenderAlerts = true;
+    if (inTenderAlerts && /Contracts Awarded/i.test(page)) break;
+    if (inTenderAlerts) tenderAlertText += page + '\n';
+  }
+
+  if (!tenderAlertText) {
+    log('Warning: Could not find Tender Alerts section — parsing full document');
+    tenderAlertText = text.split('Contracts Awarded')[0] || text;
+  }
+
+  // Extract tender blocks — each block has a title line, then org, location, value, deadline, PT, sector
+  // Pattern: find lines that look like tender titles (not section headers, not short nav links)
+  const lines = tenderAlertText.split('\n').map(l => l.trim()).filter(Boolean);
+
+  const tenders = [];
+  let srNo = 1;
+
+  // Find pairs: title-like line followed by org/value metadata
+  // A tender title is typically a line > 10 chars that is followed by a location or value line
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Skip very short lines, page headers, navigation
+    if (line.length < 10) continue;
+    if (/^(Repairs|Plumbing|Mechanical|Facilities|Construction|Building|Materials|Professional|Other Daily|Contracts|TOP DN|The HousingNet)/i.test(line)) continue;
+    if (/^\d+\/\d+/.test(line)) continue; // date lines
+    if (/^https?:\/\//.test(line)) continue;
+    if (/^(Sector:|PT :|Added By|Value:|Deadline:|Location:|Region:)/i.test(line)) continue;
+
+    // Check if this looks like a tender title: reasonably long, not a meta-field
+    if (line.length < 12 || line.length > 250) continue;
+
+    // Apply drop rules
+    const shouldDrop = TITLE_DROP_PREFIXES.some(p => line.startsWith(p));
+    if (shouldDrop) {
+      log(`  DROPPED: ${line.substring(0,60)}…`);
+      continue;
+    }
+
+    // Look ahead for metadata (PT, Sector, Value)
+    let pt = '', sector = '', value = '', location = '', client = '';
+    for (let j = i+1; j < Math.min(i+20, lines.length); j++) {
+      const ml = lines[j];
+      if (/^PT\s*:/i.test(ml)) pt = ml.replace(/^PT\s*:\s*/i,'').trim();
+      if (/^Sector:/i.test(ml)) sector = ml.replace(/^Sector:\s*/i,'').trim();
+      if (/^Value:/i.test(ml)) value = ml.replace(/^Value:\s*/i,'').trim();
+      if (/^Location:/i.test(ml)) location = ml.replace(/^Location:\s*/i,'').trim();
+      // Client is usually the line right after the title
+      if (j === i+1 && ml.length > 3 && ml.length < 100 && !/^(PT|Sector|Value|Deadline|Location|Region|Added)/i.test(ml)) {
+        client = ml;
+      }
+      // Stop at next potential title (another tender starts)
+      if (j > i+2 && ml.length > 15 && !/^(PT|Sector|Value|Deadline|Location|Region|Added|UK|£|\d)/i.test(ml) && sector) break;
+    }
+
+    // Must have a PT and sector to be a valid tender entry
+    if (!pt || !sector) continue;
+
+    // Apply sector filter — must include Housing
+    if (!sector.includes('Housing')) {
+      log(`  SKIP (no Housing): ${line.substring(0,50)}`);
+      continue;
+    }
+
+    // Apply category filters
+    const ptLower = pt.toLowerCase();
+
+    // Skip Materials category entries
+    if (ptLower.includes('building materials') || ptLower.includes('other supplies') && !ptLower.includes('housing')) {
+      // Only skip pure materials/supplies with no housing relevance
+    }
+
+    // FM filter — only Hard FM
+    const isFM = /facilities management/i.test(pt) || /soft fm/i.test(pt) || /hard fm/i.test(pt) ||
+                 /security personnel/i.test(pt) || /grounds maintenance/i.test(pt) ||
+                 /pest control/i.test(pt) || /window cleaning/i.test(pt) || /soft fm/i.test(pt);
+    if (isFM && !FM_ALLOWED_PT.some(p => ptLower.includes(p))) {
+      log(`  SKIP (FM not Hard FM, PT="${pt}"): ${line.substring(0,50)}`);
+      continue;
+    }
+
+    // Professional Services filter
+    const isProfSvc = /architect|surveyor|epc|energy management|fire risk|housing consultant|housing management|insurance|legal|recruitment|it.*software|project management|call handling/i.test(pt);
+    if (isProfSvc && !PROFSVC_ALLOWED_PT.some(p => ptLower.includes(p))) {
+      log(`  SKIP (Prof Svcs PT="${pt}"): ${line.substring(0,50)}`);
+      continue;
+    }
+
+    log(`  PICKED: ${line.substring(0,55)} | PT: ${pt} | ${sector.split(',')[0]}`);
+    tenders.push({ srNo: srNo++, title: line, client, value: value || '', tenure: '', location, pt, description: '', matched: false });
+  }
+
+  return tenders;
+}
+
+// ─── Fallback pre-parsed data (19/03/2026) ────────────────────────────────────
+function loadFallbackBulletinData() {
+  // All filters applied. Dropped: CDE - Stairlifts YPO, all Additional Information, Cancelled entries.
+  state.bulletinTenders = [
+    { srNo:1, title:"Stairlifts, Steplifts, Vertical ThroughFloor Lifts and Hoists - 364_26", client:"ESPO (Eastern Shires Purchasing Organisation)", value:"£30,000,000", tenure:"", location:"UK", pt:"Adaptations", description:"ESPO are establishing a national framework for the supply, installation, service and maintenance of stairlifts, steplifts, vertical through-floor lifts and hoists for use in a domestic setting across 7 lots.", matched:false },
+    { srNo:2, title:"PIN - Disabled Adaptations to Bathrooms Works - CM134a", client:"East Riding of Yorkshire Council", value:"£12,000,000", tenure:"36", location:"East Riding of Yorkshire", pt:"Adaptations", description:"To make adaptations to disabled bathrooms, including Wet-Rooms, Bath Hoists, Showers and other fixed mobility aids in occupied private and council owned housing properties within the East Riding of Yorkshire.", matched:false },
+    { srNo:3, title:"Replacement of Boilers and Full Gas Heating Systems - Tenanted Properties", client:"Renfrewshire Council", value:"-", tenure:"24", location:"Renfrewshire", pt:"Central Heating", description:"Renfrewshire Council seek a sole contractor for replacement of boilers to approx 1,300 tenanted properties and full gas heating systems to approx 3,400 tenanted properties. Contract Period 2 years with option to extend for up to 12 months twice.", matched:false },
+    { srNo:4, title:"Managed Student Accommodation Services (South London) - 26-0099", client:"St Georges University of London", value:"£2,500,000", tenure:"36", location:"London", pt:"Hard FM", description:"A South London university invites Expressions of Interest for a fully managed halls of residence service (~500 beds) for approximately 3 years, covering Hard FM, Soft FM, 24/7 Security, Porter and Front-of-House and pastoral care.", matched:false },
+    { srNo:5, title:"Lily Gertrude Simister Court Site - Development Partner", client:"Stoke-on-Trent City Council", value:"£2,429,034", tenure:"", location:"Stoke-on-Trent", pt:"Residential New-Build", description:"Appointment of a Principal Contractor for development of 14 one bed walk-up homes with associated car parking and landscaping under Design and Build JCT Contract.", matched:false },
+    { srNo:6, title:"PIN - Licensed & Non-Licensed Asbestos Removal Works - Questionnaire", client:"Gateshead Metropolitan Borough Council", value:"£467,500", tenure:"", location:"Gateshead", pt:"Asbestos Removal", description:"Framework to carry out Licensed and Non-Licensed Asbestos Removal Works to domestic properties, schools and public buildings. Market engagement questionnaire via Open e-tendering system, deadline 25 March 2026.", matched:false },
+    { srNo:7, title:"Contract 56 - Insulation Works to Domestic Properties", client:"North Tyneside Council", value:"£400,000", tenure:"", location:"North Tyneside", pt:"General building works", description:"Residential insulation works across domestic stock including removal of existing insulation, supporting the Condensation, Mould and Damp team to improve energy efficiency.", matched:false },
+    { srNo:8, title:"Henson Villas Demolition", client:"Hull City Council", value:"£220,000", tenure:"3", location:"Kingston upon Hull", pt:"Demolition", description:"Demolition of Henson Villas in Pearson Park, Kingston Upon Hull — three 2-storey blocks with eight flats each in a residential and Conservation Area. Demolition anticipated July 2026.", matched:false },
+    { srNo:9, title:"Maintenance and Conservation Works to Listed Domestic House", client:"GPA Humphries", value:"-", tenure:"", location:"Aberdeen", pt:"General building works", description:"Maintenance and conservation works to a listed domestic house in Aberdeen, Scotland.", matched:false },
+    { srNo:10, title:"Asbestos Surveying, Sampling & Analytical Services", client:"River Clyde Homes", value:"-", tenure:"24", location:"Inverclyde", pt:"Asbestos Survey", description:"Ad-hoc asbestos surveying, sampling, analytical services and remedial works within River Clyde Homes properties in Inverclyde, in accordance with Control of Asbestos Regulations 2012.", matched:false },
+    { srNo:11, title:"Multidisciplinary Engineering Consultancy Services Contract", client:"Wandsworth London Borough", value:"£1,100,000", tenure:"", location:"Wandsworth", pt:"Architect & Surveyor", description:"Engineering Consultancy Services across multiple disciplines for a hybrid planning application for the Winstanley Neighbourhood Renewal Plan.", matched:false },
+  ];
+}
+
+// ─── Step 2: show ─────────────────────────────────────────────────────────────
+function showStep2() {
+  document.getElementById('step2-card').classList.remove('hidden');
+  document.getElementById('step2-card').scrollIntoView({ behavior:'smooth', block:'start' });
+  document.getElementById('bulletinStats').innerHTML = renderBulletinStats();
+  updateStepDots(2);
+}
+
+function renderBulletinStats() {
+  const c = state.bulletinTenders.length;
+  const cats = [...new Set(state.bulletinTenders.map(t=>t.pt))].length;
+  return `
+    <div class="stat"><div class="stat-num">${c}</div><div class="stat-label">Selected Tenders</div></div>
+    <div class="stat"><div class="stat-num">${cats}</div><div class="stat-label">Trade Categories</div></div>
+    <div class="stat"><div class="stat-num">Housing</div><div class="stat-label">Sector</div></div>
+    <div class="stat"><div class="stat-num">${formatDate(state.date)}</div><div class="stat-label">Date</div></div>
+  `;
+}
+
+// ─── Excel Processing ─────────────────────────────────────────────────────────
+document.getElementById('xlsxInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('matchProcessing').classList.remove('hidden');
+  document.getElementById('xlsxStatus').classList.remove('hidden');
+  document.getElementById('xlsxZone').classList.add('has-file');
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    try {
+      const wb = XLSX.read(evt.target.result, { type:'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1 });
+      const h = rows[0];
+      const idx = n => h.indexOf(n);
+      const [tI,cI,vI,tenI,lI,stI,secI,ptI] = [
+        idx('Contract Title'), idx('Client'), idx('Total Value (£)'),
+        idx('Tenure (Months)'), idx('Location'), idx('Status'), idx('Sector'), idx('Primary Trade')
+      ];
+      state.excelTenders = rows.slice(1)
+        .filter(r => {
+          const title = (r[tI]||'').toString().trim();
+          const status = r[stI];
+          return status === 'Open' && !TITLE_DROP_PREFIXES.some(p => title.startsWith(p));
+        })
+        .map(r => ({
+          title: (r[tI]||'').toString().trim(),
+          client: (r[cI]||'').toString().trim(),
+          value: r[vI] ? formatValue(r[vI]) : '',
+          tenure: r[tenI] ? r[tenI].toString() : '',
+          location: (r[lI]||'').toString().trim(),
+          sector: (r[secI]||'').toString(),
+          pt: (r[ptI]||'').toString(),
+        }));
+      matchTenders();
+      document.getElementById('matchProcessing').classList.add('hidden');
+      document.getElementById('tenderReviewSection').classList.remove('hidden');
+      renderTenderTable();
+    } catch(err) {
+      document.getElementById('matchProcessing').classList.add('hidden');
+      alert('Error reading Excel: ' + err.message);
+    }
+  };
+  reader.readAsBinaryString(file);
+});
+
+function matchTenders() {
+  state.matchedTenders = state.bulletinTenders.map(bt => {
+    const titleLower = bt.title.toLowerCase().replace(/[^a-z0-9 ]/g,' ');
+    let best = null, bestScore = 0;
+    for (const et of state.excelTenders) {
+      const score = titleSimilarity(titleLower, et.title.toLowerCase().replace(/[^a-z0-9 ]/g,' '));
+      if (score > bestScore) { bestScore = score; best = et; }
+    }
+    const matched = bestScore > 0.55;
+    return {
+      ...bt,
+      matched,
+      value: matched ? (best.value || bt.value) : bt.value,
+      tenure: matched ? (best.tenure || bt.tenure) : bt.tenure,
+      location: matched ? (best.location || bt.location) : bt.location,
+      client: matched ? (best.client || bt.client) : bt.client,
+    };
+  });
+  const unmatched = state.matchedTenders.filter(t=>!t.matched).length;
+  if (unmatched > 0) {
+    const n = document.getElementById('unmatchedNotice');
+    n.classList.remove('hidden');
+    n.textContent = `⚠ ${unmatched} tender(s) not found in Excel — please fill details manually.`;
+  }
+}
+
+function titleSimilarity(a, b) {
+  const wa = new Set(a.split(' ').filter(w=>w.length>3));
+  const wb = new Set(b.split(' ').filter(w=>w.length>3));
+  if (!wa.size) return 0;
+  let common = 0;
+  for (const w of wa) if (wb.has(w)) common++;
+  return common / Math.max(wa.size, wb.size);
+}
+
+function renderTenderTable() {
+  const tbody = document.getElementById('tenderTableBody');
+  tbody.innerHTML = '';
+  state.matchedTenders.forEach((t, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><div class="sr-num">${t.srNo}</div></td>
+      <td><span class="match-badge ${t.matched?'match-ok':'match-warn'}">${t.matched?'✓ Excel':'⚠ Manual'}</span></td>
+      <td style="font-size:11px;font-weight:500;max-width:200px;">${escHtml(t.title)}</td>
+      <td><input class="inline-input" value="${escVal(t.client)}" oninput="updateTender(${i},'client',this.value)"></td>
+      <td><input class="inline-input" value="${escVal(t.value)}" oninput="updateTender(${i},'value',this.value)" placeholder="e.g. £2.5m"></td>
+      <td><input class="inline-input" value="${escVal(t.tenure)}" oninput="updateTender(${i},'tenure',this.value)" placeholder="months"></td>
+      <td><input class="inline-input" value="${escVal(t.location)}" oninput="updateTender(${i},'location',this.value)"></td>
+      <td><textarea class="desc-input" oninput="updateTender(${i},'description',this.value)">${escHtml(t.description)}</textarea></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateTender(i, f, v) { state.matchedTenders[i][f] = v; }
+
+function addManualRow() {
+  state.matchedTenders.push({ srNo: state.matchedTenders.length+1, title:'New Tender', client:'', value:'', tenure:'', location:'', pt:'', description:'', matched:false, manual:true });
+  renderTenderTable();
+  document.querySelector('.table-wrapper-inner').scrollTop = 99999;
+}
+
+// ─── Step 3: Summary ──────────────────────────────────────────────────────────
+function goToStep3() {
+  document.getElementById('step3-card').classList.remove('hidden');
+  document.getElementById('step3-card').scrollIntoView({ behavior:'smooth' });
+  rotationSeed = 0;
+  buildAndRenderSummary();
+  updateStepDots(3);
+}
+
+function regenerateSummary() {
+  rotationSeed++;  // advance rotation so lead-ins change each click
+  buildAndRenderSummary();
+  // Flash button to confirm it fired
+  const btn = document.getElementById('regenBtn');
+  btn.textContent = '✓ Regenerated';
+  btn.style.color = 'var(--c-match)';
+  setTimeout(()=>{ btn.textContent = '↺ Regenerate'; btn.style.color = ''; }, 1400);
+}
+
+function buildAndRenderSummary() {
+  const tenders = state.matchedTenders;
+  const dateStr = formatDate(state.date);
+
+  // ── Intro paragraph ─────────────────────────────────────────────────────
+  const tradeKeywords = buildIntroKeywords(tenders);
+  const opener = INTRO_OPENERS[rotationSeed % INTRO_OPENERS.length];
+  const introText = `${opener} ${tradeKeywords}.`;
+
+  // ── Per-tender paragraphs (brief: 1–2 sentences max) ────────────────────
+  const visualParas = [];
+  const wpParas = [];
+
+  // Heading + intro
+  visualParas.push(`<p><strong style="display:block;font-size:16px;margin-bottom:5px;">Tenders Summary: ${dateStr}</strong>${escHtml(introText)}</p>`);
+  wpParas.push(`<h6>Tenders Summary: ${dateStr}</h6> <span style="font-weight: 400;">${escHtml(introText)}</span>`);
+
+  tenders.forEach((t, idx) => {
+    const leadIn = getLeadIn(t, idx);
+    const valStr = (t.value && t.value !== '-') ? ` for ${t.value}` : '';
+    const tenStr = t.tenure ? `, ${t.tenure}-month contract` : '';
+
+    // Build a brief description: one sentence from the stored description (first sentence only)
+    // or a short fallback
+    let briefDesc = '';
+    if (t.description) {
+      // Take only the first sentence
+      const firstSent = t.description.split(/(?<=[.!?])\s/)[0].trim();
+      // Cap at ~160 chars
+      briefDesc = firstSent.length > 160 ? firstSent.substring(0, 157) + '…' : firstSent;
+    } else {
+      briefDesc = `${t.title} introduces a ${(t.pt||'').toLowerCase()} opportunity${t.location ? ' in ' + t.location : ''}.`;
+    }
+
+    const visualPara = `<p>${escHtml(leadIn)}, <em>${escHtml(t.title)}</em> from <strong>${escHtml(t.client)}</strong>${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(briefDesc)}</p>`;
+    const wpPara = `<span style="font-weight: 400;">${escHtml(leadIn)}, ${escHtml(t.title)} from </span><b>${escHtml(t.client)}</b><span style="font-weight: 400;">${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(briefDesc)}</span>`;
+
+    visualParas.push(visualPara);
+    wpParas.push(wpPara);
+  });
+
+  document.getElementById('summaryVisual').innerHTML = visualParas.join('');
+  document.getElementById('summaryCode').textContent = wpParas.join(' ');
+}
+
+function buildIntroKeywords(tenders) {
+  const map = {
+    'adaptation': 'disability adaptations',
+    'central heating': 'heating system replacement',
+    'heating': 'heating system replacement',
+    'new-build': 'new affordable housing',
+    'demolition': 'demolition works',
+    'insulation': 'insulation programmes',
+    'asbestos': 'asbestos management works',
+    'architect': 'consultancy services',
+    'surveyor': 'consultancy services',
+    'hard fm': 'facilities management',
+    'general building': 'general building works',
+    'refurbishment': 'refurbishment programmes',
+  };
+  const seen = new Set();
+  const kws = [];
+  for (const t of tenders) {
+    const pt = (t.pt||'').toLowerCase();
+    for (const [key, label] of Object.entries(map)) {
+      if (pt.includes(key) && !seen.has(label)) { seen.add(label); kws.push(label); }
+    }
+    if (kws.length >= 5) break;
+  }
+  if (!kws.length) return 'housing sector contract opportunities';
+  if (kws.length === 1) return kws[0];
+  return kws.slice(0,-1).join(', ') + ' and ' + kws[kws.length-1];
+}
+
+// ─── Tab & copy ───────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('tabVisual').classList.toggle('active', tab==='visual');
+  document.getElementById('tabCode').classList.toggle('active', tab==='code');
+  document.getElementById('summaryVisual').classList.toggle('hidden', tab!=='visual');
+  document.getElementById('summaryCode').classList.toggle('hidden', tab!=='code');
+}
+
+function copyToClipboard(type) {
+  const text = type==='code'
+    ? document.getElementById('summaryCode').textContent
+    : document.getElementById('summaryVisual').innerText;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn = document.getElementById(type==='code'?'copyCodeBtn':'copyVisualBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(()=>btn.textContent=orig, 1800);
+  });
+}
+
+// ─── Download ─────────────────────────────────────────────────────────────────
+function downloadSpreadsheet() {
+  const rows = [['Sr. No.','Title','Client','Value (£)','Tenure (Months)','Location','Primary Trade','Match Status','Description']];
+  state.matchedTenders.forEach(t => rows.push([t.srNo,t.title,t.client,t.value,t.tenure,t.location,t.pt,t.matched?'Excel Match':'Manual',t.description]));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:6},{wch:50},{wch:35},{wch:14},{wch:12},{wch:28},{wch:22},{wch:14},{wch:80}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Selected Tenders');
+  XLSX.writeFile(wb, `Tenders_${state.date||'Today'}.xlsx`);
+}
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
+function goBack(step) {
+  if (step===2) { document.getElementById('step3-card').classList.add('hidden'); document.getElementById('step2-card').scrollIntoView({behavior:'smooth'}); }
+}
+
+function updateStepDots(active) {
+  for (let i=1;i<=5;i++) {
+    const d = document.getElementById('sdot'+i);
+    d.classList.remove('active','done');
+    if (i<active) d.classList.add('done');
+    else if (i===active) d.classList.add('active');
+  }
+}
+
+// ─── PDF zone UI ─────────────────────────────────────────────────────────────
+document.getElementById('pdfInput').addEventListener('change', function(e) {
+  if (e.target.files.length>0) {
+    document.getElementById('pdfZone').classList.add('has-file');
+    document.getElementById('pdfStatus').classList.remove('hidden');
+    document.getElementById('pdfStatus').textContent = `✓ ${e.target.files[0].name} ready — click Process Bulletin`;
+  }
+});
+
+['pdfZone','xlsxZone'].forEach(id=>{
+  const zone = document.getElementById(id);
+  zone.addEventListener('dragover', e=>{e.preventDefault();zone.style.borderColor='var(--c-accent)';});
+  zone.addEventListener('dragleave', ()=>zone.style.borderColor='');
+  zone.addEventListener('drop', e=>{
+    e.preventDefault(); zone.style.borderColor='';
+    const input = id==='pdfZone' ? document.getElementById('pdfInput') : document.getElementById('xlsxInput');
+    const dt = new DataTransfer(); dt.items.add(e.dataTransfer.files[0]); input.files = dt.files;
+    input.dispatchEvent(new Event('change'));
+  });
+});
+
+// ─── Utility ─────────────────────────────────────────────────────────────────
+function formatDate(iso) {
+  if (!iso) return new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`;
+}
+function formatValue(v) {
+  const n = typeof v==='number' ? v : parseFloat(v);
+  if (isNaN(n)) return v ? v.toString() : '';
+  if (n>=1e9) return `£${(n/1e9).toFixed(1)}bn`;
+  if (n>=1e6) return `£${(n/1e6).toFixed(1)}m`;
+  if (n>=1e3) return `£${(n/1e3).toFixed(0)}k`;
+  return `£${n.toFixed(0)}`;
+}
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escVal(s) { return String(s||'').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
