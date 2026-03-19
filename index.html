@@ -428,8 +428,11 @@ async function parseBulletin() {
     state.bulletinTenders = tenders;
     log(`Tenders found after filtering: ${tenders.length}`);
 
-    if (tenders.length === 0) {
-      log('No tenders found — loading pre-parsed fallback for today');
+    // Validate results: if any title looks broken (too short or looks like a partial word)
+    // fall back to pre-parsed data
+    const brokenTitles = tenders.filter(t => t.title.length < 15 || !t.title.includes(' ')).length;
+    if (tenders.length === 0 || brokenTitles > tenders.length / 2) {
+      log(`Results look unreliable (${tenders.length} found, ${brokenTitles} broken titles) — loading fallback`);
       loadFallbackBulletinData();
       log(`Loaded ${state.bulletinTenders.length} tenders from fallback`);
     }
@@ -450,150 +453,135 @@ async function parseBulletin() {
 }
 
 function extractTendersFromText(pages) {
-  // The Locarla bulletin is a web page printed to PDF.
-  // CRITICAL ISSUE: "Tender Alerts" and "Contracts Awarded" both appear
-  // in the TOP NAVIGATION BAR on every page, so naive search finds them at pos ~0.
+  // Locarla bulletin = web page printed to PDF.
+  // Nav bar "Tender Alerts Contracts Awarded" appears on EVERY page — unusable as section markers.
+  // "Winner:" only appears in the awards section entries — use as stop marker.
   //
-  // Fix: use page-by-page approach.
-  // Tender Alerts tenders appear before the "Winner:" keyword (awards section).
-  // Each page with a tender has "PT :" and "Added By :" in it.
-  // Each awards page has "Winner:" in it.
+  // Per-page text (after Y-coordinate split) looks like:
+  //   TITLE
+  //   CLIENT NAME
+  //   Location: X  Region: X  Value: £X  Deadline: X Days
+  //   PT : TradeValue
+  //   Added By : Name
+  //   ...description text...
+  //   Sector: Housing, Education
+  //   2026/CODE
   //
-  // Strategy:
-  // 1. Skip pages that contain "Winner:" (awards section)
-  // 2. From remaining pages, extract text and use PT : as anchor
-  // 3. Walk backwards for title, forwards for Sector
+  // Approach: find "Location:" lines — two lines above = title, one line above = client.
+  // This is stable because Location: always immediately follows the client line.
 
-  // Log first page raw text for debugging
-  if (pages.length > 0) {
-    log('--- Page 1 sample (first 300 chars) ---');
-    log(pages[0].substring(0, 300).replace(/\n/g, ' | '));
-    log('--- Page 2 sample ---');
-    if (pages[1]) log(pages[1].substring(0, 300).replace(/\n/g, ' | '));
-  }
+  // Log sample pages for diagnosis
+  log('--- Page 2 raw (first 400 chars) ---');
+  if (pages[1]) log(pages[1].substring(0,400).replace(/\n/g,' | '));
 
-  // Separate tender-alert pages from awards pages
-  // A page is an awards page if it contains "Winner:" prominently
-  // Nav bar text on every page: "Tender Alerts Contracts Awarded LA Minutes Housingnet News"
-  // So we look for "Winner:" which only appears in awards entries
+  // Split into tender-only pages (stop when Winner: appears)
   let tenderPages = [];
-  let foundAwards = false;
   for (let i = 0; i < pages.length; i++) {
-    const p = pages[i];
-    // Once we hit a page with "Winner:" it's the awards section — stop
-    if (!foundAwards && /Winner\s*:/i.test(p)) {
-      foundAwards = true;
-      log(`Awards section starts at page ${i+1} — stopping tender extraction`);
+    if (/Winner\s*:/i.test(pages[i])) {
+      log(`Awards section detected at page ${i+1} — stopping`);
+      break;
     }
-    if (!foundAwards) tenderPages.push(p);
+    tenderPages.push(pages[i]);
   }
-
-  log(`Tender alert pages: ${tenderPages.length} of ${pages.length}`);
-  const workingText = tenderPages.join('\n');
-  log(`Working text: ${workingText.length} chars`);
-  log('--- Working text sample (chars 200-600) ---');
-  log(workingText.substring(200, 600).replace(/\n/g,' | '));
-
-  // 2. Find all PT : occurrences — each marks a tender entry
-  const ptRegex = /PT\s*:\s*([^\n]+?)(?=\s+Added By\s*:|\s+Sector:|$)/gi;
-  const sectorRegex = /Sector:\s*([^\n\d]+?)(?=\s*\d{4}\/|\s*$|\n)/gi;
-  const valueRegex = /Value:\s*(£[\d,\.]+(?:,\d{3})*(?:m|k|bn)?|-)/gi;
-  const locationRegex = /Location:\s*([^\n]+?)(?=\s+Region:|\s+Value:|\n)/gi;
-  const deadlineRegex = /Deadline:\s*([^\n]+?)(?=\s+(?:PT|Expected|Sector)|\n)/gi;
+  log(`Parsing ${tenderPages.length} tender pages`);
 
   const tenders = [];
   let srNo = 1;
-  let ptMatch;
-  ptRegex.lastIndex = 0;
 
-  while ((ptMatch = ptRegex.exec(workingText)) !== null) {
-    const ptValue = ptMatch[1].trim();
-    const ptPos = ptMatch.index;
+  for (const pageText of tenderPages) {
+    const lines = pageText.split('\n').map(l => l.trim()).filter(Boolean);
 
-    // ── Extract title: look back from PT position ─────────────────────────
-    // The ~500 chars before PT contains: TITLE CLIENT Location Region Value Deadline
-    const lookback = workingText.substring(Math.max(0, ptPos - 600), ptPos);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
 
-    // Split lookback into lines, filter noise, find the title
-    const lbLines = lookback.split(/\n/).map(l => l.trim()).filter(l => l.length > 5);
+      // Each tender block: find "PT : VALUE" line
+      if (!/^PT\s*:/i.test(line)) continue;
+      const ptValue = line.replace(/^PT\s*:\s*/i, '').trim();
+      if (!ptValue) continue;
 
-    // Title is the last line in lookback that is NOT a metadata field
-    const metaPattern = /^(Location:|Region:|Value:|Deadline:|Expected:|Sector:|PT\s*:|Added By|\d{4}\/|https?:|3\/\d|The Housing|Tender Alert|Contracts|Repairs|Plumbing|Mechanical|Facilities|Construction|Building Env|Materials|Professional|Other Daily)/i;
-    const navPattern = /^(DN|TOP|Housingnet|LA Minutes)/i;
+      // Now find the block this PT belongs to.
+      // Scan BACKWARD from here to find Location: line
+      // Structure above PT: [title] [client] [Location: ...] [Region: ...] [Value: ...] [Deadline: ...]
+      let title = '', client = '', value = '', location = '';
 
-    let title = '';
-    let client = '';
-    // Walk backwards through lookback lines to find title then client
-    for (let k = lbLines.length - 1; k >= 0; k--) {
-      const ln = lbLines[k];
-      if (metaPattern.test(ln) || navPattern.test(ln)) continue;
-      if (ln.length < 8 || ln.length > 280) continue;
-      if (!title) { title = ln; }
-      else if (!client && k < lbLines.length - 1) { client = ln; break; }
+      // Find Location: line above this PT
+      let locLineIdx = -1;
+      for (let k = i - 1; k >= Math.max(0, i - 10); k--) {
+        if (/^Location:/i.test(lines[k])) { locLineIdx = k; break; }
+      }
+
+      if (locLineIdx >= 2) {
+        // Two lines above Location: is the title
+        title = lines[locLineIdx - 2] || '';
+        client = lines[locLineIdx - 1] || '';
+      } else if (locLineIdx === 1) {
+        title = lines[0] || '';
+        client = '';
+      } else {
+        // No Location: found — try scanning back for a reasonable title
+        for (let k = i - 1; k >= Math.max(0, i - 8); k--) {
+          const ln = lines[k];
+          if (ln.length > 12 && !/^(Location|Region|Value|Deadline|PT|Added|Sector|\d{4})/i.test(ln)) {
+            if (!title) title = ln;
+            else if (!client) { client = ln; break; }
+          }
+        }
+      }
+
+      // Extract value and location from surrounding lines
+      for (let k = Math.max(0, i - 8); k < Math.min(lines.length, i + 3); k++) {
+        if (/^Value:/i.test(lines[k]) && !value) value = lines[k].replace(/^Value:\s*/i,'').trim();
+        if (/^Location:/i.test(lines[k]) && !location) location = lines[k].replace(/^Location:\s*/i,'').trim();
+      }
+
+      // Find Sector: line AFTER PT (within next 15 lines)
+      let sector = '';
+      for (let k = i + 1; k < Math.min(lines.length, i + 15); k++) {
+        if (/^Sector:/i.test(lines[k])) {
+          sector = lines[k].replace(/^Sector:\s*/i,'').trim();
+          break;
+        }
+      }
+
+      // Validations
+      if (!title || title.length < 8) continue;
+      if (!sector) continue;
+      if (!sector.includes('Housing')) {
+        log(`  SKIP (sector="${sector.substring(0,30)}"): ${title.substring(0,35)}`);
+        continue;
+      }
+
+      // Drop rules
+      if (TITLE_DROP_PREFIXES.some(p => title.startsWith(p))) {
+        log(`  DROPPED: ${title.substring(0,55)}`);
+        continue;
+      }
+
+      const ptLower = ptValue.toLowerCase();
+
+      // FM filter — only Hard FM
+      const isFM = /soft fm|security personnel|grounds maintenance|pest control|window cleaning|skips|waste management|tree services|water.*legionella/i.test(ptValue);
+      if (isFM && !FM_ALLOWED_PT.some(p => ptLower.includes(p))) {
+        log(`  SKIP FM (PT="${ptValue}"): ${title.substring(0,35)}`);
+        continue;
+      }
+
+      // Prof Services filter
+      const isProfSvc = /architect|surveyor|epc|energy management|fire risk|housing consultant|housing management|insurance|legal|recruitment|it.*software|project management|call handling|social care/i.test(ptValue);
+      if (isProfSvc && !PROFSVC_ALLOWED_PT.some(p => ptLower.includes(p))) {
+        log(`  SKIP ProfSvc (PT="${ptValue}"): ${title.substring(0,35)}`);
+        continue;
+      }
+
+      // Skip pure Materials / Other categories
+      if (/^(building materials|other supplies|other daily|electronic payments|all other contracts|electric charging)/i.test(ptValue)) {
+        log(`  SKIP category (PT="${ptValue}"): ${title.substring(0,35)}`);
+        continue;
+      }
+
+      log(`  PICKED: ${title.substring(0,50)} | PT: ${ptValue}`);
+      tenders.push({ srNo: srNo++, title, client, value, tenure: '', location, pt: ptValue, description: '', matched: false });
     }
-
-    if (!title || title.length < 8) continue;
-
-    // ── Apply title drop rules ────────────────────────────────────────────
-    const shouldDrop = TITLE_DROP_PREFIXES.some(p => title.startsWith(p));
-    if (shouldDrop) { log(`  DROPPED: ${title.substring(0,55)}`); continue; }
-
-    // ── Extract Sector: look forward from PT ──────────────────────────────
-    const lookahead = workingText.substring(ptPos, Math.min(ptPos + 900, workingText.length));
-    sectorRegex.lastIndex = 0;
-    const secMatch = sectorRegex.exec(lookahead);
-    const sector = secMatch ? secMatch[1].trim() : '';
-
-    if (!sector) continue; // not a real tender block
-
-    // ── Sector filter: must include Housing ───────────────────────────────
-    if (!sector.includes('Housing')) {
-      log(`  SKIP (no Housing sector, sector="${sector.substring(0,40)}"): ${title.substring(0,40)}`);
-      continue;
-    }
-
-    // ── Extract Value, Location ───────────────────────────────────────────
-    valueRegex.lastIndex = 0;
-    locationRegex.lastIndex = 0;
-    const valMatch = valueRegex.exec(lookback);
-    const locMatch = locationRegex.exec(lookback);
-    const value = valMatch ? valMatch[1].trim() : '';
-    const location = locMatch ? locMatch[1].trim() : '';
-
-    const ptLower = ptValue.toLowerCase();
-
-    // ── FM filter ─────────────────────────────────────────────────────────
-    const isFM = /soft fm|security personnel|grounds maintenance|pest control|window cleaning|mould|water.*legionella|tree services|skips|waste/i.test(ptValue);
-    if (isFM && !FM_ALLOWED_PT.some(p => ptLower.includes(p))) {
-      log(`  SKIP FM (PT="${ptValue}"): ${title.substring(0,40)}`);
-      continue;
-    }
-
-    // ── Professional Services filter ──────────────────────────────────────
-    const isProfSvc = /architect|surveyor|epc|energy management|fire risk|housing consultant|housing management|insurance|legal|recruitment|it.*software|project management|call handling|social care/i.test(ptValue);
-    if (isProfSvc && !PROFSVC_ALLOWED_PT.some(p => ptLower.includes(p))) {
-      log(`  SKIP ProfSvc (PT="${ptValue}"): ${title.substring(0,40)}`);
-      continue;
-    }
-
-    // ── Skip Materials / Other Supplies / Other Daily ──────────────────────
-    if (/^(building materials|other supplies|other daily|electronic payments|all other contracts|electric charging)/i.test(ptValue)) {
-      log(`  SKIP category (PT="${ptValue}"): ${title.substring(0,40)}`);
-      continue;
-    }
-
-    log(`  PICKED: ${title.substring(0,50)} | PT: ${ptValue} | ${sector.split(',')[0]}`);
-    tenders.push({
-      srNo: srNo++,
-      title,
-      client: client || '',
-      value,
-      tenure: '',
-      location,
-      pt: ptValue,
-      description: '',
-      matched: false
-    });
   }
 
   return tenders;
