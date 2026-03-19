@@ -160,13 +160,33 @@
       <span class="pill pill-amber">⚠ Prof Svcs: Architect / EPC / Fire Risk only</span>
     </div>
 
-    <div class="upload-zone" id="pdfZone" onclick="document.getElementById('pdfInput').click()">
-      <div class="upload-icon">📄</div>
-      <div class="upload-label"><strong>Click to upload</strong> the HousingNet Bulletin PDF<br>or drag and drop here</div>
-      <div class="upload-status hidden" id="pdfStatus">✓ Bulletin loaded and parsed</div>
+    <!-- Input method tabs -->
+    <div style="display:flex;gap:0;border:1px solid var(--c-border-dark);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;width:fit-content;">
+      <button class="toggle-tab active" id="tabPdf" onclick="switchInputTab('pdf')">📄 Upload PDF</button>
+      <button class="toggle-tab" id="tabHtml" onclick="switchInputTab('html')">🌐 Paste HTML Source</button>
     </div>
-    <input type="file" id="pdfInput" accept=".pdf">
-    <div class="pdf-log" id="pdfLog"></div>
+
+    <!-- PDF upload panel -->
+    <div id="panelPdf">
+      <div class="upload-zone" id="pdfZone" onclick="document.getElementById('pdfInput').click()">
+        <div class="upload-icon">📄</div>
+        <div class="upload-label"><strong>Click to upload</strong> the HousingNet Bulletin PDF<br>or drag and drop here</div>
+        <div class="upload-status hidden" id="pdfStatus">✓ Bulletin loaded and parsed</div>
+      </div>
+      <input type="file" id="pdfInput" accept=".pdf">
+      <div class="pdf-log" id="pdfLog"></div>
+    </div>
+
+    <!-- HTML paste panel -->
+    <div id="panelHtml" style="display:none;">
+      <div style="font-size:12px;color:var(--c-text-muted);margin-bottom:8px;line-height:1.6;">
+        While logged into Locarla, open the bulletin page → press <strong>Ctrl+U</strong> (View Source) → <strong>Ctrl+A</strong> → <strong>Ctrl+C</strong> → paste below.
+      </div>
+      <textarea id="htmlPasteArea" placeholder="Paste the full HTML source of the bulletin here (Ctrl+U on the bulletin page, then Ctrl+A, Ctrl+C)…"
+        style="width:100%;height:140px;padding:10px;border:2px dashed var(--c-border-dark);border-radius:var(--radius);font-size:11px;font-family:monospace;resize:vertical;background:var(--c-bg);color:var(--c-text);outline:none;"
+        oninput="this.style.borderColor=this.value.length>100?'var(--c-accent)':'var(--c-border-dark)'"></textarea>
+      <div id="htmlParseStatus" style="font-size:12px;color:var(--c-match);font-weight:500;margin-top:4px;display:none;">✓ HTML parsed successfully</div>
+    </div>
 
     <div class="date-row" style="margin-top:14px;">
       <span class="date-label">Summary Date:</span>
@@ -371,6 +391,161 @@ const state = {
   state.date = d.toISOString().split('T')[0];
 })();
 
+// ─── Input Tab Switcher ───────────────────────────────────────────────────────
+function switchInputTab(tab) {
+  document.getElementById('panelPdf').style.display   = tab === 'pdf'  ? '' : 'none';
+  document.getElementById('panelHtml').style.display  = tab === 'html' ? '' : 'none';
+  document.getElementById('tabPdf').classList.toggle('active',  tab === 'pdf');
+  document.getElementById('tabHtml').classList.toggle('active', tab === 'html');
+}
+
+// ─── HTML Source Parser ───────────────────────────────────────────────────────
+function extractTendersFromHTML(html) {
+  // Parse the bulletin HTML source pasted from Ctrl+U.
+  //
+  // KEY FACTS about the HTML structure:
+  // 1. Tender title links: <a class="headText" style="...color:#334d5c;...font-size:22px;">TITLE</a>
+  // 2. Section trade-list links: <a class="headText" style="...color:#37a000;...">Cladding, EWI...</a>  ← SKIP
+  // 3. Awards title links: <a class="headText" style="...color:#45b29d;...">Title</a>  ← STOP
+  //
+  // DOM structure per tender:
+  //   <tr class="paddingtb15-row">
+  //     <td class="paddingtb15" colspan="3">
+  //       <table width="410"> ← left: title + client
+  //         <tr><td><a class="headText">TITLE</a></td></tr>
+  //         <tr><td><span class="sourceText"><a>CLIENT</a></span></td></tr>
+  //       </table>
+  //       <table width="230"> ← right: metadata
+  //         <tr><td class="textAlign subText">
+  //           <div><strong>Location:</strong> X</div>
+  //           <div><strong>Value:</strong> £X</div>
+  //           <div><strong>PT :</strong> Y</div>
+  //           <div><strong>Added By :</strong> Z</div>
+  //         </td></tr>
+  //       </table>
+  //     </td>
+  //   </tr>
+  //   <tr>  ← NEXT sibling row
+  //     <td class="paddingtb15" colspan="3">
+  //       <p class="read-more">DESCRIPTION</p>
+  //       <p><strong>Sector:</strong> Housing, ...</p>
+  //       <p>2026/FTS ...</p>
+  //     </td>
+  //   </tr>
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  const tenders = [];
+  const seen = new Set();
+  let srNo = 1;
+
+  // Get all headText links
+  const headLinks = doc.querySelectorAll('a.headText');
+
+  for (const link of headLinks) {
+    const style = link.getAttribute('style') || '';
+
+    // STOP when we hit Contracts Awarded section (color:#45b29d)
+    if (style.includes('#45b29d')) break;
+
+    // SKIP section trade-list links (color:#37a000) and nav links
+    if (style.includes('#37a000')) continue;
+
+    // SKIP if not a tender title link (must be #334d5c at 22px)
+    if (!style.includes('#334d5c')) continue;
+    if (!style.includes('22px')) continue;
+
+    const title = decodeHtmlEntities(link.textContent.trim());
+    if (!title || title.length < 5) continue;
+    if (seen.has(title)) continue;
+    seen.add(title);
+
+    // Apply title drop rules
+    if (TITLE_DROP_PREFIXES.some(p => title.startsWith(p))) continue;
+
+    // ── Navigate to the metadata table (right-column sibling table) ──────
+    // Path: link → td → tr → table (410px) → td (paddingtb15 colspan=3)
+    const leftTable = link.closest('table');
+    if (!leftTable) continue;
+    const outerTd = leftTable.parentElement; // the colspan=3 td
+    if (!outerTd) continue;
+
+    // Find the right-column metadata td (class textAlign subText)
+    const metaTd = outerTd.querySelector('td.textAlign') || outerTd.querySelector('[class*="subText"]');
+    if (!metaTd) continue;
+
+    function getMeta(label) {
+      const divs = metaTd.querySelectorAll('div');
+      for (const div of divs) {
+        const strong = div.querySelector('strong');
+        if (!strong) continue;
+        const lbl = strong.textContent.trim().replace(/\s+/g,' ');
+        if (lbl.toLowerCase() === label.toLowerCase()) {
+          return div.textContent.replace(strong.textContent,'').trim();
+        }
+      }
+      return '';
+    }
+
+    const pt       = getMeta('PT :');
+    const location = getMeta('Location:');
+    const rawVal   = getMeta('Value:');
+
+    if (!pt) continue;
+
+    // ── Apply filter rules ─────────────────────────────────────────────────
+    const ptL = pt.toLowerCase();
+    const isFM = /soft fm|security personnel|grounds maintenance|pest control|window cleaning|skips|waste management|tree services|water.*legionella/i.test(pt);
+    if (isFM && !FM_ALLOWED_PT.some(p => ptL.includes(p))) continue;
+    const isProfSvc = /architect|surveyor|epc|energy management|fire risk|housing consultant|housing management|insurance|legal|recruitment|it.*software|project management|call handling|social care/i.test(pt);
+    if (isProfSvc && !PROFSVC_ALLOWED_PT.some(p => ptL.includes(p))) continue;
+    if (/^(building materials|other supplies|other daily|electronic payments|all other contracts|electric charging)/i.test(pt)) continue;
+
+    // ── Get Sector and Description from the NEXT sibling tr ───────────────
+    // outerTd → outerTr → nextElementSibling tr
+    const outerTr = outerTd.closest('tr');
+    const nextTr  = outerTr?.nextElementSibling;
+    let sector = '';
+    let description = '';
+
+    if (nextTr) {
+      const pEls = nextTr.querySelectorAll('p');
+      for (const p of pEls) {
+        const txt = p.textContent.trim();
+        if (txt.startsWith('Sector:')) {
+          sector = txt.replace(/^Sector:\s*/,'').trim();
+        } else if (p.classList.contains('read-more') && txt.length > 10) {
+          description = decodeHtmlEntities(txt.replace(/\s+/g,' '));
+        }
+      }
+    }
+
+    if (!sector || !sector.includes('Housing')) continue;
+
+    // ── Get client name ────────────────────────────────────────────────────
+    const clientEl = outerTd.querySelector('span.sourceText a, span.sourceText span');
+    const client   = clientEl ? decodeHtmlEntities(clientEl.textContent.trim()) : '';
+
+    // ── Format value ───────────────────────────────────────────────────────
+    let value = rawVal.replace(/&pound;/g,'£').replace(/\u00a3/g,'£');
+    if (value && value !== '-' && !value.startsWith('£')) value = '£' + value;
+
+    tenders.push({
+      srNo: srNo++, title, client, value, tenure: '', location, pt, sector, description, matched: false
+    });
+  }
+
+  return tenders;
+}
+
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+    .replace(/&quot;/g,'"').replace(/&#039;/g,"'").replace(/&pound;/g,'£')
+    .replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim();
+}
+
 // ─── PDF Parsing (PDF.js live) ────────────────────────────────────────────────
 function log(msg) {
   const el = document.getElementById('pdfLog');
@@ -381,6 +556,42 @@ function log(msg) {
 
 async function parseBulletin() {
   state.date = document.getElementById('summaryDate').value;
+
+  // ── HTML paste mode ──────────────────────────────────────────────────────
+  const htmlTab = document.getElementById('tabHtml').classList.contains('active');
+  if (htmlTab) {
+    const html = document.getElementById('htmlPasteArea').value.trim();
+    if (!html || html.length < 500) {
+      alert('Please paste the bulletin HTML source first (Ctrl+U on the bulletin page, then Ctrl+A → Ctrl+C → paste here).');
+      return;
+    }
+    document.getElementById('parseBulletinBtn').disabled = true;
+    document.getElementById('parseBulletinBtn').textContent = 'Parsing HTML…';
+    try {
+      const tenders = extractTendersFromHTML(html);
+      if (tenders.length === 0) {
+        alert('No Housing tenders found in the pasted HTML. Please make sure you pasted the full bulletin page source (Ctrl+U).');
+        document.getElementById('parseBulletinBtn').disabled = false;
+        document.getElementById('parseBulletinBtn').textContent = 'Process Bulletin →';
+        return;
+      }
+      state.bulletinTenders = tenders;
+      document.getElementById('htmlParseStatus').style.display = '';
+      document.getElementById('htmlParseStatus').textContent = `✓ Parsed ${tenders.length} Housing tenders from HTML`;
+      document.getElementById('parseBulletinBtn').disabled = false;
+      document.getElementById('parseBulletinBtn').textContent = 'Process Bulletin →';
+      showStep2();
+    } catch(err) {
+      alert('HTML parse error: ' + err.message + '\nFalling back to pre-parsed data.');
+      loadFallbackBulletinData();
+      document.getElementById('parseBulletinBtn').disabled = false;
+      document.getElementById('parseBulletinBtn').textContent = 'Process Bulletin →';
+      showStep2();
+    }
+    return;
+  }
+
+  // ── PDF mode ─────────────────────────────────────────────────────────────
   const pdfInput = document.getElementById('pdfInput');
 
   if (!pdfInput.files || pdfInput.files.length === 0) {
