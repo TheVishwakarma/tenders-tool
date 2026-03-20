@@ -296,60 +296,174 @@ const SKIP_CATEGORIES = ['materials','other daily tenders','contracts awarded'];
 // Variety pools for lead-ins and intro phrases — rotated on each Regenerate
 const LEAD_IN_POOLS = {
   adaptation: [
-    'Delivering disability adaptation services across housing stock',
     'Supporting independent living through home adaptation works',
-    'Advancing access improvement programmes within residential properties',
-    'Enabling occupants through targeted bathroom and mobility adaptation works',
+    'Advancing disability adaptation programmes across residential housing stock',
+    'Enabling residents through targeted home improvement and mobility adaptation works',
+    'Delivering property adaptation services for elderly and vulnerable residents',
   ],
   heating: [
-    'Ensuring warm and efficient homes across tenanted stock',
-    'Advancing heating system replacement across social housing',
-    'Supporting energy-efficient heating provision for tenanted properties',
-    'Delivering boiler replacement and heating upgrades across residential estates',
+    'Ensuring gas safety compliance across the housing portfolio',
+    'Advancing heating system replacement and servicing across tenanted stock',
+    'Maintaining safe and efficient heating provision for residential properties',
+    'Delivering boiler replacement, servicing and heating upgrades across council homes',
+    'Strengthening heating infrastructure and compliance programmes across housing assets',
   ],
   newbuild: [
     'Advancing new affordable housing delivery across the region',
-    'Expanding the social housing supply through new residential development',
-    'Supporting council-led housing construction programmes',
-    'Delivering new-build affordable homes for local communities',
+    'Expanding social housing supply through new residential development',
+    'Supporting council-led new-build housing construction programmes',
+    'Delivering new affordable homes for local communities',
   ],
   demolition: [
-    'Clearing residential sites for future regeneration',
     'Supporting housing regeneration through planned demolition works',
-    'Enabling site clearance ahead of redevelopment programmes',
+    'Clearing residential sites ahead of future redevelopment programmes',
+    'Enabling site clearance and demolition to support housing regeneration',
   ],
   insulation: [
-    'Improving thermal efficiency within domestic housing stock',
-    'Tackling damp and mould through residential insulation works',
-    'Supporting energy performance improvements across social housing',
+    'Improving thermal efficiency and energy performance across residential stock',
+    'Tackling fuel poverty through residential insulation and retrofit works',
+    'Supporting energy performance improvements and decarbonisation across social housing',
   ],
   asbestos: [
-    'Ensuring safe removal of hazardous materials from residential properties',
-    'Supporting compliance programmes through asbestos survey and removal works',
-    'Delivering asbestos management services across housing assets',
+    'Ensuring safe removal of hazardous materials from housing assets',
+    'Supporting compliance programmes through asbestos survey and remediation works',
+    'Delivering asbestos management and surveying services across the housing portfolio',
   ],
-  general: [
-    'Supporting planned maintenance works across housing assets',
-    'Delivering building improvement works within social housing portfolios',
-    'Advancing property improvement and repair programmes',
+  retrofit: [
+    'Driving decarbonisation and energy efficiency improvements across housing stock',
+    'Advancing retrofit and low-carbon upgrade programmes within residential assets',
+    'Supporting net-zero targets through whole-house retrofit works',
+  ],
+  firesafety: [
+    'Enhancing fire safety compliance across residential and communal buildings',
+    'Strengthening passive and active fire protection within the housing portfolio',
+    'Delivering fire door surveys, compartmentation and fire safety system works',
+    'Supporting statutory fire safety obligations across the housing estate',
+  ],
+  firerisk: [
+    'Supporting statutory fire risk assessment and compliance programmes',
+    'Delivering fire risk assessment and advisory services across housing assets',
+    'Advancing fire safety audit and risk management across the housing portfolio',
+  ],
+  electrical: [
+    'Supporting statutory electrical safety compliance across housing assets',
+    'Delivering electrical inspection, testing and maintenance programmes',
+    'Advancing EICR and fixed electrical testing across the housing estate',
+  ],
+  ventilation: [
+    'Improving indoor air quality and ventilation standards across housing stock',
+    'Delivering mechanical ventilation and extract system upgrades within residential buildings',
+  ],
+  windows: [
+    'Improving building fabric and energy efficiency through window and door replacement',
+    'Delivering window, door and glazing upgrades across the housing portfolio',
+  ],
+  roofing: [
+    'Strengthening housing asset maintenance programmes through roofing works',
+    'Delivering roof replacement and roofline works across the housing estate',
+    'Advancing planned roofing investment across housing stock',
+  ],
+  cladding: [
+    'Supporting building safety remediation and cladding replacement programmes',
+    'Advancing external wall system remediation and cladding works',
+  ],
+  surveyor: [
+    'Procuring professional chartered surveying and valuation services',
+    'Supporting capital programmes through specialist surveying consultancy',
+    'Advancing property disposal and estate management through surveying expertise',
   ],
   architect: [
-    'Supporting built environment consultancy across housing renewal programmes',
-    'Procuring professional design and engineering services for housing projects',
     'Advancing consultancy frameworks to underpin housing capital programmes',
+    'Supporting built environment consultancy across housing renewal and development programmes',
+    'Procuring professional design, architecture and engineering services',
+  ],
+  epc: [
+    'Advancing energy performance assessment and carbon reduction programmes',
+    'Supporting EPC compliance and energy management across the housing portfolio',
   ],
   fm: [
     'Delivering integrated facilities management services across residential assets',
-    'Providing hard FM and maintenance solutions within housing accommodation',
+    'Providing hard FM and planned maintenance solutions within housing accommodation',
+    'Supporting total FM delivery across social housing and communal building assets',
+  ],
+  refurbishment: [
+    'Advancing refurbishment and improvement works across housing assets',
+    'Delivering whole-house and partial refurbishment programmes within the housing estate',
+    'Supporting planned refurbishment pipelines across residential and defence accommodation',
+    'Strengthening housing asset quality through targeted refurbishment investment',
+  ],
+  construction: [
+    'Supporting commercial and residential construction programmes across the region',
+    'Delivering major construction and development works for public sector clients',
+  ],
+  general: [
+    'Supporting planned maintenance and building improvement works across housing assets',
+    'Delivering general building repairs and maintenance across the social housing portfolio',
+    'Advancing responsive and planned repair programmes within council-owned housing stock',
+    'Strengthening building maintenance capacity across residential and communal properties',
   ],
   other: [
     'Advancing procurement opportunities within the social housing sector',
     'Supporting housing service delivery through specialist contract opportunities',
+    'Creating new procurement routes for housing and public sector organisations',
   ],
 };
 
-// Rotation state — increments on each regenerate so lead-ins cycle
+// Rotation seed — increments on each regenerate so lead-ins and connectors cycle
 let rotationSeed = 0;
+
+// Connector verbs — vary by index so adjacent paragraphs don't repeat
+const CONNECTORS = ['introduces', 'establishes', 'signals', 'outlines', 'proposes', 'sets out', 'launches'];
+function getConnector(offset) {
+  return CONNECTORS[(rotationSeed + offset) % CONNECTORS.length];
+}
+
+// Build a concise 1–2 sentence description from the raw description field.
+// Extracts the first genuinely informative sentence, then adds one scope sentence
+// if found (mentions lots, trades, geography, coverage etc).
+function buildTenderDesc(t) {
+  const desc = (t.description || '').trim();
+  if (!desc) return '';
+
+  // Split into sentences on . ! ? followed by space+capital or end of string
+  const sentences = desc.match(/[^.!?]+[.!?]+/g) || [desc];
+
+  // Skip sentences that are too short or just repeat the title
+  const titleWords = (t.title || '').toLowerCase().split(/\s+/).filter(w => w.length > 4).slice(0, 5);
+  let first = '';
+  for (const s of sentences) {
+    const clean = s.trim();
+    if (clean.length < 45) continue;
+    const overlap = titleWords.filter(w => clean.toLowerCase().includes(w));
+    if (overlap.length >= 3) continue;
+    first = clean;
+    break;
+  }
+  if (!first && sentences.length) first = sentences[0].trim();
+
+  // Trim to ~200 chars at a word boundary
+  if (first.length > 210) {
+    first = first.slice(0, 210).replace(/\s+\S+$/, '');
+  }
+  if (first && !first.match(/[.!?]$/)) first += '.';
+
+  // Find a second sentence with scope/lot/trade detail
+  const scopeRe = /\b(lot|lots|comprising|covering|including|spanning|split into|divided|across|trades|workstream|scope|areas|properties|homes|sites|geograph)/i;
+  let second = '';
+  for (const s of sentences.slice(1, 8)) {
+    const clean = s.trim();
+    if (clean.length < 30 || clean.length > 240) continue;
+    if (scopeRe.test(clean)) {
+      second = clean;
+      if (!second.match(/[.!?]$/)) second += '.';
+      break;
+    }
+  }
+
+  return second ? `${first} ${second}` : first;
+}
+
+
 
 function pickLeadIn(pool, offset) {
   return pool[(rotationSeed + offset) % pool.length];
@@ -357,16 +471,74 @@ function pickLeadIn(pool, offset) {
 
 function getLeadIn(t, offset) {
   const pt = (t.pt || '').toLowerCase();
-  if (pt.includes('adaptation')) return pickLeadIn(LEAD_IN_POOLS.adaptation, offset);
-  if (pt.includes('central heating') || pt.includes('heating')) return pickLeadIn(LEAD_IN_POOLS.heating, offset);
-  if (pt.includes('new-build') || pt.includes('residential new')) return pickLeadIn(LEAD_IN_POOLS.newbuild, offset);
-  if (pt.includes('demolition')) return pickLeadIn(LEAD_IN_POOLS.demolition, offset);
-  if (pt.includes('insulation')) return pickLeadIn(LEAD_IN_POOLS.insulation, offset);
-  if (pt.includes('asbestos')) return pickLeadIn(LEAD_IN_POOLS.asbestos, offset);
-  if (pt.includes('architect') || pt.includes('surveyor')) return pickLeadIn(LEAD_IN_POOLS.architect, offset);
-  if (pt.includes('hard fm') || pt.includes('fm')) return pickLeadIn(LEAD_IN_POOLS.fm, offset);
-  if (pt.includes('general building') || pt.includes('refurbishment') || pt.includes('conservation')) return pickLeadIn(LEAD_IN_POOLS.general, offset);
+  if (pt.includes('adaptation'))                                    return pickLeadIn(LEAD_IN_POOLS.adaptation, offset);
+  if (pt.includes('central heating') || pt.includes('gas servic') || pt.includes('heat network') || pt.includes('heat pump') || pt.includes('boiler') || (pt.includes('heating') && !pt.includes('commercial'))) return pickLeadIn(LEAD_IN_POOLS.heating, offset);
+  if (pt.includes('residential new') || pt.includes('new-build'))  return pickLeadIn(LEAD_IN_POOLS.newbuild, offset);
+  if (pt.includes('demolition'))                                    return pickLeadIn(LEAD_IN_POOLS.demolition, offset);
+  if (pt.includes('insulation') || pt.includes('retrofit') || pt.includes('ewi')) return pickLeadIn(LEAD_IN_POOLS.retrofit, offset);
+  if (pt.includes('asbestos'))                                      return pickLeadIn(LEAD_IN_POOLS.asbestos, offset);
+  if (pt.includes('fire safety') || pt.includes('passive fire') || pt.includes('fire door') || pt.includes('fire alarm') || pt.includes('sprinkler')) return pickLeadIn(LEAD_IN_POOLS.firesafety, offset);
+  if (pt.includes('fire risk'))                                     return pickLeadIn(LEAD_IN_POOLS.firerisk, offset);
+  if (pt.includes('electrical') || pt.includes('eicr') || pt.includes('solar') || pt.includes('lighting')) return pickLeadIn(LEAD_IN_POOLS.electrical, offset);
+  if (pt.includes('ventilation') || pt.includes('air con'))        return pickLeadIn(LEAD_IN_POOLS.ventilation, offset);
+  if (pt.includes('doors') || pt.includes('windows') || pt.includes('glazing')) return pickLeadIn(LEAD_IN_POOLS.windows, offset);
+  if (pt.includes('roofing') || pt.includes('cladding') && !pt.includes('insulation')) return pickLeadIn(LEAD_IN_POOLS.roofing, offset);
+  if (pt.includes('cladding'))                                      return pickLeadIn(LEAD_IN_POOLS.cladding, offset);
+  if (pt.includes('surveyor') || pt.includes('valuation'))         return pickLeadIn(LEAD_IN_POOLS.surveyor, offset);
+  if (pt.includes('architect'))                                     return pickLeadIn(LEAD_IN_POOLS.architect, offset);
+  if (pt.includes('epc') || pt.includes('energy management'))      return pickLeadIn(LEAD_IN_POOLS.epc, offset);
+  if (pt.includes('hard fm') || pt.includes('soft fm') || (pt.includes('fm') && pt.length < 6)) return pickLeadIn(LEAD_IN_POOLS.fm, offset);
+  if (pt.includes('refurbishment') || pt.includes('voids') || pt.includes('kitchen') || pt.includes('bathroom')) return pickLeadIn(LEAD_IN_POOLS.refurbishment, offset);
+  if (pt.includes('construction') || pt.includes('new build') || pt.includes('groundwork')) return pickLeadIn(LEAD_IN_POOLS.construction, offset);
+  if (pt.includes('general building') || pt.includes('repairs') || pt.includes('responsive') || pt.includes('painting') || pt.includes('drainage') || pt.includes('plumbing')) return pickLeadIn(LEAD_IN_POOLS.general, offset);
   return pickLeadIn(LEAD_IN_POOLS.other, offset);
+}
+
+// Build a concise 1–2 sentence description from structured fields + raw description
+function buildTenderDesc(t) {
+  const desc = (t.description || '').trim();
+  if (!desc) return '';
+
+  // Extract the first genuinely informative sentence from the raw description.
+  // Split on sentence-ending punctuation followed by a space and capital letter.
+  const sentences = desc.match(/[^.!?]+[.!?]+/g) || [desc];
+
+  // Find first sentence that's substantive (>40 chars, not just a heading/title repeat)
+  const titleWords = (t.title || '').toLowerCase().split(/\s+/).slice(0, 4);
+  let first = '';
+  for (const s of sentences) {
+    const clean = s.trim();
+    if (clean.length < 40) continue;
+    // Skip sentences that are mostly the title repeated
+    const overlap = titleWords.filter(w => w.length > 4 && clean.toLowerCase().includes(w));
+    if (overlap.length >= 3) continue;
+    first = clean;
+    break;
+  }
+  if (!first && sentences.length) first = sentences[0].trim();
+
+  // Trim to ~200 chars at a word boundary, don't cut mid-sentence
+  if (first.length > 220) {
+    first = first.slice(0, 220).replace(/\s+\S+$/, '') + '.';
+  }
+  if (first && !first.match(/[.!?]$/)) first += '.';
+
+  // Pick a second sentence with key scope detail (lots, trades, geography)
+  // Look for sentences mentioning lot, comprising, covering, including, spanning
+  const scopeKeywords = /\b(lot|lots|comprising|covering|including|spanning|split into|divided|across|trades|workstream)/i;
+  let second = '';
+  for (const s of sentences.slice(1)) {
+    const clean = s.trim();
+    if (clean === first) continue;
+    if (clean.length < 30 || clean.length > 250) continue;
+    if (scopeKeywords.test(clean)) {
+      second = clean;
+      if (!second.match(/[.!?]$/)) second += '.';
+      break;
+    }
+  }
+
+  return second ? `${first} ${second}` : first;
 }
 
 const INTRO_OPENERS = [
@@ -400,140 +572,108 @@ function switchInputTab(tab) {
 }
 
 // ─── HTML Source Parser ───────────────────────────────────────────────────────
+// IMPORTANT: htmlGetMeta is defined OUTSIDE extractTendersFromHTML to avoid
+// the JS function-declaration hoisting bug when declared inside a for loop.
+function htmlGetMeta(metaTd, label) {
+  for (const div of metaTd.querySelectorAll('div')) {
+    const strong = div.querySelector('strong');
+    if (!strong) continue;
+    if (strong.textContent.trim().toLowerCase() === label.toLowerCase()) {
+      return div.textContent.replace(strong.textContent, '').trim();
+    }
+  }
+  return '';
+}
+
 function extractTendersFromHTML(html) {
-  // Parse the bulletin HTML source pasted from Ctrl+U.
-  //
-  // KEY FACTS about the HTML structure:
-  // 1. Tender title links: <a class="headText" style="...color:#334d5c;...font-size:22px;">TITLE</a>
-  // 2. Section trade-list links: <a class="headText" style="...color:#37a000;...">Cladding, EWI...</a>  ← SKIP
-  // 3. Awards title links: <a class="headText" style="...color:#45b29d;...">Title</a>  ← STOP
-  //
-  // DOM structure per tender:
-  //   <tr class="paddingtb15-row">
-  //     <td class="paddingtb15" colspan="3">
-  //       <table width="410"> ← left: title + client
-  //         <tr><td><a class="headText">TITLE</a></td></tr>
-  //         <tr><td><span class="sourceText"><a>CLIENT</a></span></td></tr>
-  //       </table>
-  //       <table width="230"> ← right: metadata
-  //         <tr><td class="textAlign subText">
-  //           <div><strong>Location:</strong> X</div>
-  //           <div><strong>Value:</strong> £X</div>
-  //           <div><strong>PT :</strong> Y</div>
-  //           <div><strong>Added By :</strong> Z</div>
-  //         </td></tr>
-  //       </table>
-  //     </td>
-  //   </tr>
-  //   <tr>  ← NEXT sibling row
-  //     <td class="paddingtb15" colspan="3">
-  //       <p class="read-more">DESCRIPTION</p>
-  //       <p><strong>Sector:</strong> Housing, ...</p>
-  //       <p>2026/FTS ...</p>
-  //     </td>
-  //   </tr>
+  // Color key in the bulletin HTML:
+  //   #334d5c at font-size:22px = Tender Alert title link  ← PICK
+  //   #37a000                   = Trade category list link ← SKIP
+  //   #45b29d                   = Contracts Awarded title  ← STOP
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
-
   const tenders = [];
   const seen = new Set();
   let srNo = 1;
 
-  // Get all headText links
-  const headLinks = doc.querySelectorAll('a.headText');
-
-  for (const link of headLinks) {
+  for (const link of doc.querySelectorAll('a.headText')) {
     const style = link.getAttribute('style') || '';
 
-    // STOP when we hit Contracts Awarded section (color:#45b29d)
-    if (style.includes('#45b29d')) break;
-
-    // SKIP section trade-list links (color:#37a000) and nav links
-    if (style.includes('#37a000')) continue;
-
-    // SKIP if not a tender title link (must be #334d5c at 22px)
-    if (!style.includes('#334d5c')) continue;
-    if (!style.includes('22px')) continue;
+    if (style.includes('#45b29d')) break;          // hit awards section — stop
+    if (style.includes('#37a000')) continue;        // trade category header — skip
+    if (!style.includes('#334d5c') || !style.includes('22px')) continue; // not a tender title
 
     const title = decodeHtmlEntities(link.textContent.trim());
     if (!title || title.length < 5) continue;
     if (seen.has(title)) continue;
     seen.add(title);
 
-    // Apply title drop rules
     if (TITLE_DROP_PREFIXES.some(p => title.startsWith(p))) continue;
 
-    // ── Navigate to the metadata table (right-column sibling table) ──────
-    // Path: link → td → tr → table (410px) → td (paddingtb15 colspan=3)
-    const leftTable = link.closest('table');
-    if (!leftTable) continue;
-    const outerTd = leftTable.parentElement; // the colspan=3 td
+    // Navigate to the colspan=3 outer td using closest() — robust against browser
+    // auto-inserting <tbody> elements which would break .parentElement
+    const outerTd = link.closest('td[colspan]');
     if (!outerTd) continue;
 
-    // Find the right-column metadata td (class textAlign subText)
-    const metaTd = outerTd.querySelector('td.textAlign') || outerTd.querySelector('[class*="subText"]');
+    // Metadata is in the RIGHT-HAND 230-wide table inside outerTd.
+    // Scope to that specific table to avoid picking up PT from a neighbouring tender.
+    const metaTable = Array.from(outerTd.querySelectorAll('table')).find(t => {
+      const w = t.getAttribute('width') || t.style.width || '';
+      return w === '230';
+    });
+    const metaTd = metaTable
+      ? (metaTable.querySelector('td.textAlign') || metaTable.querySelector('[class*="subText"]'))
+      : (outerTd.querySelector('td.textAlign') || outerTd.querySelector('[class*="subText"]'));
     if (!metaTd) continue;
 
-    function getMeta(label) {
-      const divs = metaTd.querySelectorAll('div');
-      for (const div of divs) {
-        const strong = div.querySelector('strong');
-        if (!strong) continue;
-        const lbl = strong.textContent.trim().replace(/\s+/g,' ');
-        if (lbl.toLowerCase() === label.toLowerCase()) {
-          return div.textContent.replace(strong.textContent,'').trim();
-        }
-      }
-      return '';
-    }
-
-    const pt       = getMeta('PT :');
-    const location = getMeta('Location:');
-    const rawVal   = getMeta('Value:');
+    const pt       = htmlGetMeta(metaTd, 'PT :').replace(/\s+/g, ' ').trim();
+    const location = htmlGetMeta(metaTd, 'Location:').replace(/\s+/g, ' ').trim();
+    const rawVal   = htmlGetMeta(metaTd, 'Value:').replace(/\s+/g, ' ').trim();
 
     if (!pt) continue;
 
-    // ── Apply filter rules ─────────────────────────────────────────────────
+    // Filter rules — same as PDF parser
     const ptL = pt.toLowerCase();
-    const isFM = /soft fm|security personnel|grounds maintenance|pest control|window cleaning|skips|waste management|tree services|water.*legionella/i.test(pt);
-    if (isFM && !FM_ALLOWED_PT.some(p => ptL.includes(p))) continue;
-    const isProfSvc = /architect|surveyor|epc|energy management|fire risk|housing consultant|housing management|insurance|legal|recruitment|it.*software|project management|call handling|social care/i.test(pt);
-    if (isProfSvc && !PROFSVC_ALLOWED_PT.some(p => ptL.includes(p))) continue;
+    if (/soft fm|security personnel|grounds maintenance|pest control|window cleaning|skips|waste management|tree services|water.*legionella/i.test(pt)) {
+      if (!FM_ALLOWED_PT.some(p => ptL.includes(p))) continue;
+    }
+    if (/architect|surveyor|epc|energy management|fire risk|housing consultant|housing management|insurance|legal|recruitment|it.*software|project management|call handling|social care/i.test(pt)) {
+      if (!PROFSVC_ALLOWED_PT.some(p => ptL.includes(p))) continue;
+    }
     if (/^(building materials|other supplies|other daily|electronic payments|all other contracts|electric charging)/i.test(pt)) continue;
 
-    // ── Get Sector and Description from the NEXT sibling tr ───────────────
-    // outerTd → outerTr → nextElementSibling tr
+    // Sector + Description: scan forward through sibling <tr>s until we find
+    // the description row (has a Sector: paragraph). Using forward-scan instead of
+    // nextElementSibling because display-variant rows (hideOnWeb, showoniPad) can
+    // sit between the title+meta row and the description row.
     const outerTr = outerTd.closest('tr');
-    const nextTr  = outerTr?.nextElementSibling;
-    let sector = '';
-    let description = '';
-
-    if (nextTr) {
-      const pEls = nextTr.querySelectorAll('p');
-      for (const p of pEls) {
-        const txt = p.textContent.trim();
-        if (txt.startsWith('Sector:')) {
-          sector = txt.replace(/^Sector:\s*/,'').trim();
-        } else if (p.classList.contains('read-more') && txt.length > 10) {
-          description = decodeHtmlEntities(txt.replace(/\s+/g,' '));
+    let sector = '', description = '';
+    if (outerTr) {
+      let sibling = outerTr.nextElementSibling;
+      while (sibling) {
+        const sectorP = Array.from(sibling.querySelectorAll('p'))
+          .find(p => p.textContent.trim().startsWith('Sector:'));
+        if (sectorP) {
+          sector = sectorP.textContent.trim().replace(/^Sector:\s*/, '').trim();
+          const descP = sibling.querySelector('p.read-more');
+          if (descP) description = decodeHtmlEntities(descP.textContent.replace(/\s+/g, ' ').trim());
+          break;
         }
+        if (sibling.querySelector('a.headText')) break;
+        sibling = sibling.nextElementSibling;
       }
     }
 
     if (!sector || !sector.includes('Housing')) continue;
 
-    // ── Get client name ────────────────────────────────────────────────────
     const clientEl = outerTd.querySelector('span.sourceText a, span.sourceText span');
     const client   = clientEl ? decodeHtmlEntities(clientEl.textContent.trim()) : '';
 
-    // ── Format value ───────────────────────────────────────────────────────
-    let value = rawVal.replace(/&pound;/g,'£').replace(/\u00a3/g,'£');
+    let value = rawVal.replace(/&pound;/g, '£').replace(/\u00a3/g, '£');
     if (value && value !== '-' && !value.startsWith('£')) value = '£' + value;
 
-    tenders.push({
-      srNo: srNo++, title, client, value, tenure: '', location, pt, sector, description, matched: false
-    });
+    tenders.push({ srNo: srNo++, title, client, value, tenure: '', location, pt, sector, description, matched: false });
   }
 
   return tenders;
@@ -569,6 +709,7 @@ async function parseBulletin() {
     document.getElementById('parseBulletinBtn').textContent = 'Parsing HTML…';
     try {
       const tenders = extractTendersFromHTML(html);
+
       if (tenders.length === 0) {
         alert('No Housing tenders found in the pasted HTML. Please make sure you pasted the full bulletin page source (Ctrl+U).');
         document.getElementById('parseBulletinBtn').disabled = false;
@@ -981,21 +1122,16 @@ function buildAndRenderSummary() {
   wpParas.push(`<h6>Tenders Summary: ${dateStr}</h6> <span style="font-weight: 400;">${escHtml(introText)}</span>`);
 
   tenders.forEach((t, idx) => {
-    const leadIn = getLeadIn(t, idx);
-    const valStr = (t.value && t.value !== '-') ? ` for ${t.value}` : '';
-    const tenStr = t.tenure ? `, ${t.tenure}-month contract` : '';
+    const leadIn    = getLeadIn(t, idx);
+    const connector = getConnector(idx);
+    const valStr    = (t.value && t.value !== '-') ? ` for ${t.value}` : '';
+    const tenStr    = t.tenure ? `, ${t.tenure}-month contract` : '';
 
-    // Full description — no truncation
-    const desc = t.description
-      ? t.description.trim()
-      : `${t.title} introduces a ${(t.pt||'').toLowerCase()} opportunity${t.location ? ' in ' + t.location : ''}.`;
+    // Smart condensed description — 1–2 sentences max
+    const descClean = buildTenderDesc(t);
 
-    // Ensure description ends with a full stop
-    const descClean = desc.endsWith('.') || desc.endsWith('…') ? desc.replace(/…$/, '.') : desc + '.';
-
-    const visualPara = `<p>${escHtml(leadIn)}, <em>${escHtml(t.title)}</em> from <strong>${escHtml(t.client)}</strong>${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</p>`;
-    // WP: each paragraph on its own line separated by a blank line for readability
-    const wpPara = `<span style="font-weight: 400;">${escHtml(leadIn)}, ${escHtml(t.title)} from </span><b>${escHtml(t.client)}</b><span style="font-weight: 400;">${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</span>`;
+    const visualPara = `<p>${leadIn}, <em>${escHtml(t.title)}</em> from <strong>${escHtml(t.client)}</strong>${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</p>`;
+    const wpPara = `<span style="font-weight: 400;">${escHtml(leadIn)}, </span><em>${escHtml(t.title)}</em><span style="font-weight: 400;"> from </span><b>${escHtml(t.client)}</b><span style="font-weight: 400;">${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</span>`;
 
     visualParas.push(visualPara);
     wpParas.push(wpPara);
@@ -1007,32 +1143,57 @@ function buildAndRenderSummary() {
 }
 
 function buildIntroKeywords(tenders) {
-  const map = {
-    'adaptation': 'disability adaptations',
-    'central heating': 'heating system replacement',
-    'heating': 'heating system replacement',
-    'new-build': 'new affordable housing',
-    'demolition': 'demolition works',
-    'insulation': 'insulation programmes',
-    'asbestos': 'asbestos management works',
-    'architect': 'consultancy services',
-    'surveyor': 'consultancy services',
-    'hard fm': 'facilities management',
-    'general building': 'general building works',
-    'refurbishment': 'refurbishment programmes',
-  };
+  const map = [
+    { key: 'adaptation',        label: 'disability adaptations' },
+    { key: 'central heating',   label: 'heating system replacement' },
+    { key: 'gas servic',        label: 'gas servicing contracts' },
+    { key: 'heat pump',         label: 'heat pump installation' },
+    { key: 'heat network',      label: 'heat network works' },
+    { key: 'heating',           label: 'heating system replacement' },
+    { key: 'new-build',         label: 'new affordable housing' },
+    { key: 'residential new',   label: 'new affordable housing' },
+    { key: 'demolition',        label: 'demolition works' },
+    { key: 'retrofit',          label: 'retrofit and decarbonisation' },
+    { key: 'insulation',        label: 'insulation programmes' },
+    { key: 'asbestos',          label: 'asbestos management works' },
+    { key: 'fire safety',       label: 'fire safety works' },
+    { key: 'fire risk',         label: 'fire risk assessment services' },
+    { key: 'electrical',        label: 'electrical compliance programmes' },
+    { key: 'solar',             label: 'solar PV installation' },
+    { key: 'ventilation',       label: 'ventilation upgrades' },
+    { key: 'roofing',           label: 'roofing works' },
+    { key: 'cladding',          label: 'cladding remediation' },
+    { key: 'windows',           label: 'window and door replacement' },
+    { key: 'kitchen',           label: 'kitchen upgrades' },
+    { key: 'bathroom',          label: 'bathroom refurbishment' },
+    { key: 'voids',             label: 'void property works' },
+    { key: 'refurbishment',     label: 'refurbishment programmes' },
+    { key: 'architect',         label: 'consultancy services' },
+    { key: 'surveyor',          label: 'surveying and consultancy' },
+    { key: 'epc',               label: 'energy performance assessments' },
+    { key: 'hard fm',           label: 'facilities management' },
+    { key: 'general building',  label: 'general building works' },
+    { key: 'repairs',           label: 'housing repairs programmes' },
+    { key: 'scaffolding',       label: 'scaffolding works' },
+    { key: 'drainage',          label: 'drainage works' },
+    { key: 'construction',      label: 'construction programmes' },
+    { key: 'landscaping',       label: 'landscaping and grounds works' },
+  ];
   const seen = new Set();
   const kws = [];
   for (const t of tenders) {
-    const pt = (t.pt||'').toLowerCase();
-    for (const [key, label] of Object.entries(map)) {
-      if (pt.includes(key) && !seen.has(label)) { seen.add(label); kws.push(label); }
+    const pt = (t.pt || '').toLowerCase();
+    for (const { key, label } of map) {
+      if (pt.includes(key) && !seen.has(label)) {
+        seen.add(label);
+        kws.push(label);
+      }
     }
-    if (kws.length >= 5) break;
+    if (kws.length >= 6) break;
   }
   if (!kws.length) return 'housing sector contract opportunities';
   if (kws.length === 1) return kws[0];
-  return kws.slice(0,-1).join(', ') + ' and ' + kws[kws.length-1];
+  return kws.slice(0, -1).join(', ') + ' and ' + kws[kws.length - 1];
 }
 
 // ─── Tab & copy ───────────────────────────────────────────────────────────────
