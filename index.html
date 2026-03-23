@@ -117,9 +117,7 @@
   <div class="header-steps">
     <div class="step-dot active" id="sdot1">1</div><div class="step-line"></div>
     <div class="step-dot" id="sdot2">2</div><div class="step-line"></div>
-    <div class="step-dot" id="sdot3">3</div><div class="step-line"></div>
-    <div class="step-dot" id="sdot4">4</div><div class="step-line"></div>
-    <div class="step-dot" id="sdot5">5</div>
+    <div class="step-dot" id="sdot3">3</div>
   </div>
 </div>
 
@@ -1197,8 +1195,8 @@ function renderApiSummary(text, dateStr, introText) {
   const wpParas = [];
 
   // Heading + structured keyword intro (not the AI's opening line)
-  visualParas.push(`<p><strong style="display:block;font-size:16px;margin-bottom:5px;">Tenders Summary: ${dateStr}</strong>${escHtml(introText)}</p>`);
-  wpParas.push(`<h6>Tenders Summary: ${dateStr}</h6>\n<p>${escHtml(introText)}</p>`);
+  visualParas.push(`<p><strong style="display:block;font-size:16px;margin-bottom:5px;">Contract Tenders: ${dateStr}</strong>${escHtml(introText)}</p>`);
+  wpParas.push(`<h6>Contract Tenders: ${dateStr}</h6>\n<p>${escHtml(introText)}</p>`);
 
   // Skip the first paragraph if it looks like a generic AI opening sentence
   // (doesn't mention a specific tender title or authority)
@@ -1233,8 +1231,8 @@ function renderLocalSummary(tenders, dateStr) {
   const visualParas = [];
   const wpParas = [];
 
-  visualParas.push(`<p><strong style="display:block;font-size:16px;margin-bottom:5px;">Tenders Summary: ${dateStr}</strong>${escHtml(introText)}</p>`);
-  wpParas.push(`<h6>Tenders Summary: ${dateStr}</h6>\n<p>${escHtml(introText)}</p>`);
+  visualParas.push(`<p><strong style="display:block;font-size:16px;margin-bottom:5px;">Contract Tenders: ${dateStr}</strong>${escHtml(introText)}</p>`);
+  wpParas.push(`<h6>Contract Tenders: ${dateStr}</h6>\n<p>${escHtml(introText)}</p>`);
 
   tenders.forEach((t, idx) => {
     const leadIn = getLeadIn(t, idx);
@@ -1342,7 +1340,7 @@ function goBack(step) {
 }
 
 function updateStepDots(active) {
-  for (let i=1;i<=5;i++) {
+  for (let i=1;i<=3;i++) {
     const d = document.getElementById('sdot'+i);
     d.classList.remove('active','done');
     if (i<active) d.classList.add('done');
