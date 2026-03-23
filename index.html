@@ -125,20 +125,7 @@
 
 <div class="main">
 
-  <!-- Deploy Guide -->
-  <div class="deploy-card" id="deployCard">
-    <h3>🚀 One-Click Daily Setup — Free GitHub Pages Hosting</h3>
-    <ol class="deploy-steps">
-      <li>Go to <strong>github.com</strong> → sign up free → click <strong>New repository</strong> → name it <code>tenders-tool</code> → set to Public → click Create</li>
-      <li>Click <strong>Add file → Upload files</strong> → drag this HTML file in → rename it <code>index.html</code> → click <strong>Commit changes</strong></li>
-      <li>Go to <strong>Settings → Pages</strong> → under Source select <strong>Deploy from branch: main / root</strong> → click Save</li>
-      <li>Your tool is now live at <code>https://YOUR-USERNAME.github.io/tenders-tool</code> — bookmark this URL</li>
-      <li>Each day: open the URL → upload bulletin PDF → upload Excel → generate → done. No install, no code, works on any browser</li>
-      <li>If filter rules change: download updated HTML from this chat → go to your repo → click <code>index.html</code> → pencil icon → paste → Commit</li>
-    </ol>
-    <button class="deploy-toggle" onclick="document.getElementById('deployCard').style.display='none'">Got it, hide this</button>
-  </div>
-
+  
   <!-- Step 1: Bulletin PDF -->
   <div class="card" id="step1-card">
     <div class="card-title"><span class="sb">1</span> Upload Daily Bulletin PDF</div>
@@ -251,6 +238,14 @@
   <!-- Step 3: Summary -->
   <div class="card hidden" id="step3-card">
     <div class="card-title"><span class="sb">3</span> Generated Summary</div>
+
+    <!-- API Key row -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <label style="font-size:12px;font-weight:600;white-space:nowrap;">Anthropic API Key</label>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-…" style="flex:1;min-width:220px;font-size:12px;padding:6px 10px;border:1px solid var(--c-border);border-radius:6px;font-family:monospace;" oninput="saveApiKey(this.value)">
+      <span id="apiKeyStatus" style="font-size:11px;color:#888;"></span>
+    </div>
+
     <div class="summary-toolbar">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <div class="toggle-tabs">
@@ -421,53 +416,32 @@ function getConnector(offset) {
 // Build a concise 1–2 sentence description from the raw description field.
 // Extracts the first genuinely informative sentence, then adds one scope sentence
 // if found (mentions lots, trades, geography, coverage etc).
-function buildTenderDesc(t) {
+
+// Local fallback sentence builder (used if API unavailable)
+function buildTenderDescLocal(t) {
   const desc = (t.description || '').trim();
   if (!desc) return '';
-
-  // Split into sentences on . ! ? followed by space+capital or end of string
   const sentences = desc.match(/[^.!?]+[.!?]+/g) || [desc];
-
-  // Skip sentences that are too short or just repeat the title
   const titleWords = (t.title || '').toLowerCase().split(/\s+/).filter(w => w.length > 4).slice(0, 5);
   let first = '';
   for (const s of sentences) {
     const clean = s.trim();
-    if (clean.length < 45) continue;
+    if (clean.length < 30) continue;
     const overlap = titleWords.filter(w => clean.toLowerCase().includes(w));
     if (overlap.length >= 3) continue;
     first = clean;
     break;
   }
   if (!first && sentences.length) first = sentences[0].trim();
-
-  // Trim to ~200 chars at a word boundary
-  if (first.length > 210) {
-    first = first.slice(0, 210).replace(/\s+\S+$/, '');
+  const words = first.split(/\s+/);
+  if (words.length > 20) {
+    first = words.slice(0, 20).join(' ');
+    first = first.replace(/[,;:\-–]\s*\S*$/, '').replace(/\s+\S+$/, '');
   }
   if (first && !first.match(/[.!?]$/)) first += '.';
-
-  // Find a second sentence with scope/lot/trade detail
-  // Must be genuinely different from the first (no near-duplicate content)
-  const scopeRe = /\b(lot|lots|comprising|covering|including|spanning|split into|divided|across|trades|workstream|scope|properties|homes|sites|geograph)/i;
-  let second = '';
-  const firstWords = new Set(first.toLowerCase().split(/\s+/).filter(w => w.length > 5));
-  for (const s of sentences.slice(1, 8)) {
-    const clean = s.trim();
-    if (clean.length < 30 || clean.length > 200) continue;
-    // Skip if too similar to first sentence (>50% word overlap)
-    const cleanWords = clean.toLowerCase().split(/\s+/).filter(w => w.length > 5);
-    const overlap = cleanWords.filter(w => firstWords.has(w)).length;
-    if (overlap > cleanWords.length * 0.5) continue;
-    if (scopeRe.test(clean)) {
-      second = clean;
-      if (!second.match(/[.!?]$/)) second += '.';
-      break;
-    }
-  }
-
-  return second ? `${first} ${second}` : first;
+  return first;
 }
+
 
 
 
@@ -1092,59 +1066,188 @@ function addManualRow() {
 }
 
 // ─── Step 3: Summary ──────────────────────────────────────────────────────────
-function goToStep3() {
+function saveApiKey(val) {
+  try { localStorage.setItem('locarla_api_key', val.trim()); } catch(e) {}
+  document.getElementById('apiKeyStatus').textContent = val.trim() ? '✓ Saved' : '';
+}
+
+function loadApiKey() {
+  try {
+    const k = localStorage.getItem('locarla_api_key') || '';
+    if (k) {
+      document.getElementById('apiKeyInput').value = k;
+      document.getElementById('apiKeyStatus').textContent = '✓ Saved';
+    }
+  } catch(e) {}
+}
+
+async function goToStep3() {
   document.getElementById('step3-card').classList.remove('hidden');
   document.getElementById('step3-card').scrollIntoView({ behavior:'smooth' });
+  loadApiKey();
   rotationSeed = 0;
-  buildAndRenderSummary();
+  await buildAndRenderSummary();
   updateStepDots(3);
 }
 
-function regenerateSummary() {
-  rotationSeed++;  // advance rotation so lead-ins change each click
-  buildAndRenderSummary();
-  // Flash button to confirm it fired
+async function regenerateSummary() {
+  rotationSeed++;
+  await buildAndRenderSummary();
   const btn = document.getElementById('regenBtn');
   btn.textContent = '✓ Regenerated';
   btn.style.color = 'var(--c-match)';
   setTimeout(()=>{ btn.textContent = '↺ Regenerate'; btn.style.color = ''; }, 1400);
 }
 
-function buildAndRenderSummary() {
+async function buildAndRenderSummary() {
   const tenders = state.matchedTenders;
   const dateStr = formatDate(state.date);
 
-  // ── Intro paragraph ─────────────────────────────────────────────────────
+  document.getElementById('summaryVisual').innerHTML = '<p style="color:#888;font-style:italic;">Generating summary…</p>';
+  document.getElementById('summaryCode').textContent = '';
+
+  // Build structured keyword intro — used as the SEO meta opening line
   const tradeKeywords = buildIntroKeywords(tenders);
   const opener = INTRO_OPENERS[rotationSeed % INTRO_OPENERS.length];
   const introText = `${opener} ${tradeKeywords}.`;
 
-  // ── Per-tender paragraphs (brief: 1–2 sentences max) ────────────────────
+  const apiKey = (document.getElementById('apiKeyInput')?.value || '').trim();
+
+  if (apiKey) {
+    // ── AI-powered summary ──────────────────────────────────────────────
+    const tenderList = tenders.map((t, i) => {
+      const rawVal = t.value && t.value !== '-' ? t.value : '';
+      // Format value per rules: £Xk under 1m, £Xm at or above 1m
+      let fmtVal = rawVal;
+      if (rawVal) {
+        const num = parseFloat(rawVal.replace(/[^0-9.]/g, ''));
+        if (!isNaN(num)) {
+          if (num >= 1000000) fmtVal = `£${(num/1000000).toFixed(1).replace(/\.0$/,'')}m`;
+          else if (num >= 1000) fmtVal = `£${Math.round(num/1000)}k`;
+          else fmtVal = `£${Math.round(num)}`;
+        }
+      }
+      const val  = fmtVal || 'value not stated';
+      const ten  = t.tenure ? `${t.tenure} months` : '';
+      const desc = (t.description || '').slice(0, 350);
+      return `${i+1}. Title: ${t.title}\n   Authority: ${t.client}${fmtVal ? '\n   Value: ' + val : ''}${ten ? '\n   Term: ' + ten : ''}\n   Type: ${t.pt}\n   Location: ${t.location || 'UK'}${desc ? '\n   Scope: ' + desc : ''}`;
+    }).join('\n\n');
+
+    const prompt = `Generate a structured, SEO-optimised daily tender summary for the UK social housing sector dated ${dateStr}.
+
+Write one paragraph per contract (or one paragraph per authority if the same authority has multiple tenders, clubbing them smoothly), keeping them in the exact order provided. Do NOT write an opening or closing sentence — just the per-tender paragraphs.
+
+Rules for each paragraph:
+- Begin with a unique and engaging intro phrase — never start with a location or region name
+- Include the EXACT contract title as published (in italics is fine)
+- Include the issuing authority name in bold
+- Format values as £Xk (under £1m) or £Xm (£1m and above)
+- Include tenure/term where provided
+- STRICT maximum 50 words per paragraph — this is a hard limit, do not exceed it
+- Two sentences maximum per paragraph
+- Narrative prose only — no bullet points, no headings
+- Use SEO-friendly terms: framework, procurement opportunity, housing stock, remedial works, fire safety, compliance, refurbishment
+- Each paragraph must start with different words — never repeat an opening phrase
+- Never start a paragraph with a location, region, or the word "A" or "The"
+
+Here is an example of the exact style and length required:
+"Advancing housing maintenance capacity, Housing Refurbishment Contract from **Ashfield District Council** for £69m, 36-month contract covers general building repairs across council homes in Nottinghamshire, split into three geographical lots."
+
+End with one brief closing sentence (under 20 words) linking today's opportunities.
+
+Output plain paragraphs only — no markdown headings, no bullet points, no preamble, no asterisks.
+
+${tenderList}
+
+Output plain paragraphs only — no markdown headings, no bullet points, no preamble.`;
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-opus-4-5',
+          max_tokens: 1500,
+          system: 'You are an expert UK social housing industry writer producing SEO-optimised daily tender summaries for a professional procurement website. You write in a news-style, factual, engaging tone for contractors and industry readers.',
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      const text = (data.content?.[0]?.text || '').trim();
+      if (text) { renderApiSummary(text, dateStr, introText); return; }
+    } catch(e) {
+      console.warn('API error:', e.message);
+      document.getElementById('apiKeyStatus').textContent = '⚠ API error — using local';
+    }
+  }
+
+  // ── Local fallback ──────────────────────────────────────────────────────
+  renderLocalSummary(tenders, dateStr);
+}
+
+function renderApiSummary(text, dateStr, introText) {
+  const rawParas = text.split(/\n{2,}/).map(p => p.replace(/\n/g,' ').trim()).filter(p => p.length > 0);
   const visualParas = [];
   const wpParas = [];
 
-  // Heading + intro
+  // Heading + structured keyword intro (not the AI's opening line)
+  visualParas.push(`<p><strong style="display:block;font-size:16px;margin-bottom:5px;">Tenders Summary: ${dateStr}</strong>${escHtml(introText)}</p>`);
+  wpParas.push(`<h6>Tenders Summary: ${dateStr}</h6>\n<p>${escHtml(introText)}</p>`);
+
+  // Skip the first paragraph if it looks like a generic AI opening sentence
+  // (doesn't mention a specific tender title or authority)
+  let paras = rawParas;
+  if (rawParas.length > 1) {
+    const first = rawParas[0].toLowerCase();
+    const isGenericOpener = !state.matchedTenders.some(t =>
+      first.includes(t.client.toLowerCase().slice(0,10)) ||
+      first.includes(t.title.toLowerCase().slice(0,15))
+    );
+    if (isGenericOpener) paras = rawParas.slice(1);
+  }
+
+  paras.forEach(para => {
+    // Remove all asterisk markdown (* and **) — convert ** to strong, strip lone *
+    let html = para
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')  // **bold** → <strong>
+      .replace(/\*([^*]+?)\*/g, '$1')                     // *italic* → plain text
+      .replace(/\*/g, '');                                  // any remaining stray *
+    visualParas.push(`<p>${html}</p>`);
+    wpParas.push(`<p>${html}</p>`);
+  });
+
+  document.getElementById('summaryVisual').innerHTML = visualParas.join('');
+  document.getElementById('summaryCode').textContent = wpParas.join('\n\n');
+}
+
+function renderLocalSummary(tenders, dateStr) {
+  const tradeKeywords = buildIntroKeywords(tenders);
+  const opener = INTRO_OPENERS[rotationSeed % INTRO_OPENERS.length];
+  const introText = `${opener} ${tradeKeywords}.`;
+  const visualParas = [];
+  const wpParas = [];
+
   visualParas.push(`<p><strong style="display:block;font-size:16px;margin-bottom:5px;">Tenders Summary: ${dateStr}</strong>${escHtml(introText)}</p>`);
   wpParas.push(`<h6>Tenders Summary: ${dateStr}</h6>\n<p>${escHtml(introText)}</p>`);
 
   tenders.forEach((t, idx) => {
-    const leadIn    = getLeadIn(t, idx);
-    const connector = getConnector(idx);
-    const valStr    = (t.value && t.value !== '-') ? ` for ${t.value}` : '';
-    const tenStr    = t.tenure ? `, ${t.tenure}-month contract` : '';
-
-    // Smart condensed description — 1–2 sentences max
-    const descClean = buildTenderDesc(t);
-
+    const leadIn = getLeadIn(t, idx);
+    const valStr = (t.value && t.value !== '-') ? ` for ${t.value}` : '';
+    const tenStr = t.tenure ? `, ${t.tenure}-month contract` : '';
+    const descClean = buildTenderDescLocal(t);
     const visualPara = `<p>${leadIn}, <em>${escHtml(t.title)}</em> from <strong>${escHtml(t.client)}</strong>${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</p>`;
-    const wpPara = `<p><span style="font-weight: 400;">${escHtml(leadIn)}, </span><em>${escHtml(t.title)}</em><span style="font-weight: 400;"> from </span><strong>${escHtml(t.client)}</strong><span style="font-weight: 400;">${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</span></p>`;
-
+    const wpPara = `<p>${escHtml(leadIn)}, <em>${escHtml(t.title)}</em> from <strong>${escHtml(t.client)}</strong>${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</p>`;
     visualParas.push(visualPara);
     wpParas.push(wpPara);
   });
 
   document.getElementById('summaryVisual').innerHTML = visualParas.join('');
-  // WP code: each paragraph separated by a blank line so it's readable and pasteable
   document.getElementById('summaryCode').textContent = wpParas.join('\n\n');
 }
 
