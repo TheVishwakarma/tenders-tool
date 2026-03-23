@@ -448,11 +448,17 @@ function buildTenderDesc(t) {
   if (first && !first.match(/[.!?]$/)) first += '.';
 
   // Find a second sentence with scope/lot/trade detail
-  const scopeRe = /\b(lot|lots|comprising|covering|including|spanning|split into|divided|across|trades|workstream|scope|areas|properties|homes|sites|geograph)/i;
+  // Must be genuinely different from the first (no near-duplicate content)
+  const scopeRe = /\b(lot|lots|comprising|covering|including|spanning|split into|divided|across|trades|workstream|scope|properties|homes|sites|geograph)/i;
   let second = '';
+  const firstWords = new Set(first.toLowerCase().split(/\s+/).filter(w => w.length > 5));
   for (const s of sentences.slice(1, 8)) {
     const clean = s.trim();
-    if (clean.length < 30 || clean.length > 240) continue;
+    if (clean.length < 30 || clean.length > 200) continue;
+    // Skip if too similar to first sentence (>50% word overlap)
+    const cleanWords = clean.toLowerCase().split(/\s+/).filter(w => w.length > 5);
+    const overlap = cleanWords.filter(w => firstWords.has(w)).length;
+    if (overlap > cleanWords.length * 0.5) continue;
     if (scopeRe.test(clean)) {
       second = clean;
       if (!second.match(/[.!?]$/)) second += '.';
@@ -1119,7 +1125,7 @@ function buildAndRenderSummary() {
 
   // Heading + intro
   visualParas.push(`<p><strong style="display:block;font-size:16px;margin-bottom:5px;">Tenders Summary: ${dateStr}</strong>${escHtml(introText)}</p>`);
-  wpParas.push(`<h6>Tenders Summary: ${dateStr}</h6> <span style="font-weight: 400;">${escHtml(introText)}</span>`);
+  wpParas.push(`<h6>Tenders Summary: ${dateStr}</h6>\n<p>${escHtml(introText)}</p>`);
 
   tenders.forEach((t, idx) => {
     const leadIn    = getLeadIn(t, idx);
@@ -1131,7 +1137,7 @@ function buildAndRenderSummary() {
     const descClean = buildTenderDesc(t);
 
     const visualPara = `<p>${leadIn}, <em>${escHtml(t.title)}</em> from <strong>${escHtml(t.client)}</strong>${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</p>`;
-    const wpPara = `<span style="font-weight: 400;">${escHtml(leadIn)}, </span><em>${escHtml(t.title)}</em><span style="font-weight: 400;"> from </span><b>${escHtml(t.client)}</b><span style="font-weight: 400;">${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</span>`;
+    const wpPara = `<p><span style="font-weight: 400;">${escHtml(leadIn)}, </span><em>${escHtml(t.title)}</em><span style="font-weight: 400;"> from </span><strong>${escHtml(t.client)}</strong><span style="font-weight: 400;">${escHtml(valStr)}${escHtml(tenStr)}. ${escHtml(descClean)}</span></p>`;
 
     visualParas.push(visualPara);
     wpParas.push(wpPara);
